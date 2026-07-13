@@ -1,0 +1,21 @@
+# 编译产物
+/bin/
+*.exe
+*.exe~
+
+# 测试与覆盖率
+*.test
+*.out
+coverage.txt
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 子智能体工作目录
+.pi-subagents/

@@ -1,0 +1,135 @@
+// Package main 是 mock-service 进程入口，用于演示和测试网关反向代理。
+//
+// 提供以下端点：
+//   - GET /hello?name=xxx: 返回 JSON 格式的问候语；
+//   - POST /echo: 原样返回请求体和 Content-Type；
+//   - GET /slow?delay=duration: 等待指定时长后返回，用于测试超时；
+//   - GET /stream?count=N: 返回 SSE 格式的流式响应，用于测试流式代理。
+//
+// 仅使用 Go 标准库，不引入任何第三方依赖。
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+func main() {
+	addr := flag.String("addr", ":18080", "监听地址")
+	flag.Parse()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hello", handleHello)
+	mux.HandleFunc("/echo", handleEcho)
+	mux.HandleFunc("/slow", handleSlow)
+	mux.HandleFunc("/stream", handleStream)
+
+	log.Printf("mock-service 启动于 %s", *addr)
+	if err := http.ListenAndServe(*addr, mux); err != nil {
+		log.Fatalf("mock-service 启动失败: %v", err)
+	}
+}
+
+// handleHello 返回 JSON 格式的问候语。
+//
+// Query 参数 name 指定问候对象，默认为 "world"。
+// 响应格式：{"message": "Hello, name!"}
+func handleHello(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "world"
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": fmt.Sprintf("Hello, %s!", name),
+	})
+}
+
+// handleEcho 原样返回请求体。
+//
+// 用于验证代理正确转发请求体。
+// 响应的 Content-Type 与请求一致。
+func handleEcho(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "读取请求体失败", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
+}
+
+// handleSlow 等待指定时长后返回。
+//
+// Query 参数 delay 指定等待时长（如 "2s"），默认 1s。
+// 用于测试网关的请求超时行为。
+func handleSlow(w http.ResponseWriter, r *http.Request) {
+	delayStr := r.URL.Query().Get("delay")
+	if delayStr == "" {
+		delayStr = "1s"
+	}
+	delay, err := time.ParseDuration(delayStr)
+	if err != nil {
+		http.Error(w, "invalid delay", http.StatusBadRequest)
+		return
+	}
+
+	select {
+	case <-r.Context().Done():
+		// 客户端已断开，直接返回。
+		return
+	case <-time.After(delay):
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "done",
+		"delay":   delayStr,
+	})
+}
+
+// handleStream 返回 SSE 格式的流式响应。
+//
+// Query 参数 count 指定事件数量（默认 5），interval 指定事件间隔（默认 100ms）。
+// 用于测试网关对流式响应的代理能力，验证首个事件在连接结束前对客户端可见。
+func handleStream(w http.ResponseWriter, r *http.Request) {
+	countStr := r.URL.Query().Get("count")
+	count, err := strconv.Atoi(countStr)
+	if err != nil || count <= 0 {
+		count = 5
+	}
+
+	intervalStr := r.URL.Query().Get("interval")
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil || interval <= 0 {
+		interval = 100 * time.Millisecond
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	for i := 0; i < count; i++ {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(interval):
+		}
+		fmt.Fprintf(w, "data: event-%d\n\n", i)
+		flusher.Flush()
+	}
+}
