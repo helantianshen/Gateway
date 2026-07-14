@@ -2,7 +2,7 @@
 
 一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、连接池复用和统一错误处理。
 
-> 当前版本：**Phase 0/1** — 工程骨架与最小反向代理链路
+> 当前版本：**Phase 2** — 配置模型与严格 YAML
 
 ## 架构
 
@@ -41,7 +41,8 @@ upstream 服务
 # 终端 1：启动 mock-service（默认监听 :18080）
 make run-mock
 
-# 终端 2：启动 gateway（默认 public :8080，admin :9090）
+# 终端 2：使用默认 configs/gateway.yaml 启动 gateway
+# 默认监听 public :8080、admin :9090，并转发到 mock-service :18080
 make run-gateway
 ```
 
@@ -65,18 +66,62 @@ curl -i http://127.0.0.1:9090/readyz
 
 ## 配置
 
-通过环境变量配置，不使用 YAML 或外部配置中心：
+Phase 2 将配置明确分为两类：YAML 是 upstream、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
+
+### YAML 业务配置
+
+```yaml
+api_version: v1
+
+upstreams:
+  - id: mock-service
+    endpoints:
+      - id: mock-1
+        url: http://127.0.0.1:18080
+        weight: 100
+
+routes:
+  - id: default
+    path: /
+    upstream: mock-service
+
+policies:
+  request_timeout: 3s
+  rate: 0
+  burst: 0
+```
+
+加载器使用 `gopkg.in/yaml.v3` 的严格字段模式，未知字段、空文档、`null` 和多文档输入都会导致启动失败。完整配置还会经过以下校验：
+
+- `api_version` 当前必须为 `v1`；
+- upstream、endpoint 和 route 的 ID 必须非空，并在各自作用域内唯一；
+- route 引用的 upstream 必须存在；
+- endpoint URL 必须是带 host 的 `http` 或 `https` 绝对 URL，且不允许包含 userinfo；
+- `weight` 必须为正整数，省略时默认取 `100`；
+- `request_timeout` 必须是正数 Go duration，例如 `3s`、`500ms` 或 `1m`；
+- `rate` 和 `burst` 必须为非负整数；它们在 Phase 2 只解析和校验，尚不执行限流。
+
+配置模型已经预留后续路由和负载均衡字段，但 Phase 2 运行时只接受一条 `path: /` 的兜底路由，以及该路由所引用 upstream 中的单个 endpoint。多路由、host/method 匹配、非兜底路径或多 endpoint 会返回明确的阶段约束错误，不会被静默忽略。
+
+### 环境变量启动参数
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
+| `GATEWAY_CONFIG_FILE` | `configs/gateway.yaml` | YAML 业务配置文件路径 |
 | `GATEWAY_PUBLIC_ADDR` | `:8080` | public Server 监听地址 |
 | `GATEWAY_ADMIN_ADDR` | `:9090` | admin Server 监听地址 |
-| `GATEWAY_UPSTREAM_URL` | `http://127.0.0.1:18080` | 反向代理目标地址 |
-| `GATEWAY_REQUEST_TIMEOUT` | `3s` | 单次代理请求总超时 |
-| `GATEWAY_SHUTDOWN_TIMEOUT` | `10s` | Graceful Shutdown 超时 |
+| `GATEWAY_SHUTDOWN_TIMEOUT` | `10s` | Graceful Shutdown 超时，必须为正数 Go duration |
 
-- upstream 必须是带 host 的 `http` 或 `https` 绝对 URL
-- 时长配置必须为正值（如 `3s`、`500ms`、`1m`）
+例如，使用自定义配置文件和监听地址启动：
+
+```bash
+GATEWAY_CONFIG_FILE=/etc/gateway/gateway.yaml \
+GATEWAY_PUBLIC_ADDR=127.0.0.1:8080 \
+GATEWAY_ADMIN_ADDR=127.0.0.1:9090 \
+make run-gateway
+```
+
+Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。若部署环境仍声明任一旧变量，启动会返回迁移错误；请分别改用 YAML 的 `upstreams[].endpoints[].url` 和 `policies.request_timeout`。所有配置加载与校验都在 Application 创建监听器之前完成，因此非法配置不会占用 public 或 admin 端口。
 
 ## 项目结构
 
@@ -85,9 +130,11 @@ curl -i http://127.0.0.1:9090/readyz
 ├── cmd/
 │   ├── gateway/            # 网关进程入口
 │   └── mock-service/       # 本地演示 upstream
+├── configs/
+│   └── gateway.yaml        # Phase 2 默认 YAML 示例配置
 ├── internal/
 │   ├── bootstrap/          # 应用生命周期：双 Server、Run、Graceful Shutdown
-│   ├── config/             # 环境变量配置加载与校验
+│   ├── config/             # 严格 YAML、启动参数、校验与强类型编译
 │   └── dataplane/
 │       ├── proxy/          # httputil.ReverseProxy 封装
 │       ├── server/         # HTTP Server 与健康端点
@@ -97,7 +144,8 @@ curl -i http://127.0.0.1:9090/readyz
 │   ├── 01-technology-selection.md   # 技术选型
 │   ├── 02-architecture-design.md    # 架构设计
 │   ├── 03-development-roadmap.md    # 完整开发路线
-│   └── 04-phase-0-1-implementation-plan.md  # Phase 0/1 实施计划
+│   ├── 04-phase-0-1-implementation-plan.md  # Phase 0/1 实施计划
+│   └── 05-phase-2-implementation-plan.md    # Phase 2 实施计划
 ├── .github/workflows/ci.yml          # GitHub Actions CI
 ├── Makefile                          # fmt / vet / test / race / build
 ├── go.mod                            # github.com/helantianshen/gateway
@@ -155,12 +203,7 @@ make fmt-check vet test race build
 
 ## 技术约束
 
-本阶段严格只使用 Go 标准库，不引入任何第三方依赖：
-
-```bash
-$ go list -m all
-github.com/helantianshen/gateway
-```
+数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。本阶段不引入配置中心、动态配置、第三方路由器或负载均衡框架。
 
 ## 开发路线
 
@@ -168,7 +211,7 @@ github.com/helantianshen/gateway
 |---:|---|---|
 | 0 | 工程骨架与质量基线 | ✅ 完成 |
 | 1 | 最小反向代理链路 | ✅ 完成 |
-| 2 | 配置模型与严格 YAML | 计划中 |
+| 2 | 配置模型与严格 YAML | ✅ 完成 |
 | 3 | 路由语义与 Radix Tree | — |
 | 4 | Upstream 与 Round Robin | — |
 | 5 | 中间件、日志与 Prometheus | — |

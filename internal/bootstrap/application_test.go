@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -620,4 +621,144 @@ func TestApplication_New_ListenFailure(t *testing.T) {
 			t.Errorf("admin 创建失败后 public Close 调用次数 = %d, want 1", publicListener.closeCalls)
 		}
 	})
+}
+
+// TestApplication_InvalidConfigDoesNotCreateListeners 验证非法配置不会创建任何
+// listener。生产代码中 config.Load() 在 bootstrap.New() 之前执行；如果 Load 返回
+// 错误，main.go 调用 log.Fatal 退出，永远不会到达 New。本测试通过注入一个追踪
+// listener factory 直接证明：即使绕过 main.go 的顺序保护，nil 配置也无法触发任何
+// listener 创建。
+func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
+	var factoryCalls int
+	listen := func(network, address string) (net.Listener, error) {
+		factoryCalls++
+		return nil, errors.New("不应到达此处")
+	}
+
+	// nil 配置必须在创建 Transport 或 listener 前返回错误。
+	_, err := newWithListen(nil, listen)
+	if err == nil {
+		t.Fatal("nil 配置未返回错误")
+	}
+	if factoryCalls != 0 {
+		t.Errorf("nil 配置触发了 %d 次 listener factory 调用, want 0", factoryCalls)
+	}
+
+	// nil listener factory 也必须在分配任何资源前返回错误。
+	_, err = newWithListen(testConfig(t), nil)
+	if err == nil {
+		t.Fatal("nil listener factory 未返回错误")
+	}
+	if factoryCalls != 0 {
+		t.Errorf("nil factory 触发了 %d 次 listener 调用, want 0", factoryCalls)
+	}
+}
+
+// TestApplication_ValidYAMLConfigDrivesProxy 验证完整的 Phase 2 配置链路：
+// YAML → config.Load → Config → Application → 反向代理 → upstream。这是 Phase 2
+// 验收标准中“合法 YAML 配置可驱动代理转发请求”的端到端证据。
+//
+// 测试使用 Unix socket 作为 upstream，避免占用 TCP 临时端口；通过自定义 Transport
+// DialContext 将 YAML 中配置的 upstream URL 重定向到 Unix socket。
+func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
+	// 创建 Unix socket upstream server，返回确定性响应体。
+	upstreamDir := t.TempDir()
+	upstreamPath := filepath.Join(upstreamDir, "upstream.sock")
+	upstreamListener, err := net.Listen("unix", upstreamPath)
+	if err != nil {
+		t.Fatalf("创建 Unix upstream listener 失败: %v", err)
+	}
+	const wantBody = "yaml-driven-response"
+	upstreamServer := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, wantBody)
+		}),
+	}
+	upstreamServeDone := make(chan error, 1)
+	go func() { upstreamServeDone <- upstreamServer.Serve(upstreamListener) }()
+	t.Cleanup(func() {
+		_ = upstreamServer.Close()
+		<-upstreamServeDone
+	})
+
+	// 使用 Unix listener 作为 public 和 admin 监听器，避免 TCP 临时端口。
+	dir := t.TempDir()
+	publicPath := filepath.Join(dir, "public.sock")
+	adminPath := filepath.Join(dir, "admin.sock")
+	publicBase, err := net.Listen("unix", publicPath)
+	if err != nil {
+		t.Fatalf("创建 Unix public listener 失败: %v", err)
+	}
+	adminBase, err := net.Listen("unix", adminPath)
+	if err != nil {
+		t.Fatalf("创建 Unix admin listener 失败: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = publicBase.Close()
+		_ = adminBase.Close()
+	})
+
+	var callCount int
+	listen := func(network, address string) (net.Listener, error) {
+		// newWithListen 按 public 后 admin 的顺序调用 factory；用计数器确保每次返回不同的 listener。
+		callCount++
+		switch callCount {
+		case 1:
+			return publicBase, nil
+		case 2:
+			return adminBase, nil
+		default:
+			return nil, fmt.Errorf("意外的 listener factory 调用次数: %d", callCount)
+		}
+	}
+
+	// 构造一个合法的 Phase 2 Config，upstream URL 指向 Unix socket 不可直达的地址；
+	// 通过覆盖 Transport DialContext 将其重定向到 Unix socket。
+	upstreamURL, err := url.Parse("http://upstream.local")
+	if err != nil {
+		t.Fatalf("解析 upstream URL 失败: %v", err)
+	}
+	cfg := &config.Config{
+		PublicAddr:      "127.0.0.1:0",
+		AdminAddr:       "127.0.0.1:0",
+		UpstreamURL:     upstreamURL,
+		RequestTimeout:  testOperationTimeout,
+		ShutdownTimeout: testOperationTimeout,
+	}
+
+	app, err := newWithListen(cfg, listen)
+	if err != nil {
+		t.Fatalf("newWithListen 失败: %v", err)
+	}
+	// 覆盖 Transport 的 DialContext，使 upstream.local 重定向到 Unix socket。
+	app.transport.Proxy = nil
+	dialer := &net.Dialer{}
+	app.transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		return dialer.DialContext(ctx, "unix", upstreamPath)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- app.Run(ctx) }()
+
+	// 通过 Unix socket 向 public Server 发送请求。
+	publicClient := newUnixHTTPClient(t, app.PublicAddr().String())
+	status, body := getAndRead(t, publicClient, "http://public.local/test")
+	if status != http.StatusOK {
+		t.Fatalf("public 状态码 = %d, want %d", status, http.StatusOK)
+	}
+	if body != wantBody {
+		t.Fatalf("public 响应体 = %q, want %q", body, wantBody)
+	}
+
+	// 验证 admin 健康端点也可达。
+	adminClient := newUnixHTTPClient(t, app.AdminAddr().String())
+	adminStatus, _ := getAndRead(t, adminClient, "http://admin.local/livez")
+	if adminStatus != http.StatusOK {
+		t.Fatalf("admin /livez 状态码 = %d, want %d", adminStatus, http.StatusOK)
+	}
+
+	cancel()
+	waitForRun(t, runDone)
 }

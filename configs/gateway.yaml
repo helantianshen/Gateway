@@ -1,0 +1,25 @@
+# Gateway Phase 2 示例配置。
+# 当前运行时只支持一条 path 为 "/" 的兜底路由，以及该路由所引用 upstream 中的
+# 单个 endpoint；多路由和多 endpoint 会被明确拒绝，相关能力分别在后续阶段实现。
+api_version: v1
+
+upstreams:
+  - id: mock-service
+    endpoints:
+      - id: mock-1
+        url: http://127.0.0.1:18080
+        # weight 省略时默认取 100；Phase 2 会校验该值，但尚不执行负载均衡。
+        weight: 100
+
+routes:
+  - id: default
+    # Phase 2 必须使用兜底路径，host 与 method 等匹配字段应保持未设置。
+    path: /
+    upstream: mock-service
+
+policies:
+  # request_timeout 已用于限制单次代理请求的总处理时长。
+  request_timeout: 3s
+  # rate 与 burst 在 Phase 2 仅做严格解析和非负校验，尚不执行限流。
+  rate: 0
+  burst: 0

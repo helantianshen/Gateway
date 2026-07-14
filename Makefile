@@ -29,8 +29,9 @@ race:
 build:
 	go build ./...
 
-# 运行 gateway 进程
+# 运行 gateway 进程；可通过 GATEWAY_CONFIG_FILE 覆盖默认配置文件 configs/gateway.yaml
 run-gateway:
+	@echo "使用配置文件: $${GATEWAY_CONFIG_FILE:-configs/gateway.yaml}"
 	go run ./cmd/gateway
 
 # 运行 mock-service 进程，用于演示和测试反向代理

@@ -1,14 +1,14 @@
 // Package main 是 gateway 进程的唯一正式入口。
 //
-// 职责（Phase 0–1）：
-//   - 从环境变量读取最小启动配置；
-//   - 创建并初始化 Application（包括 public/admin 两个 HTTP Server）；
+// 职责（Phase 2）：
+//   - 先读取环境变量中的本地启动参数，再严格加载、校验并编译 YAML 业务配置；
+//   - 只有完整配置管线成功后才创建 Application，确保非法配置不会绑定监听端口；
 //   - 使用 signal.NotifyContext 监听 SIGINT/SIGTERM；
-//   - 调用 Application.Run 并根据返回结果设置退出码。
+//   - 调用 Application.Run，并根据运行或优雅停机结果设置退出码。
 //
 // 非职责：
-//   - 不承载反向代理、路由、健康检查等业务逻辑（属于 Phase 1+）；
-//   - 不直接管理 HTTP Server 的启动和关闭（由 Application 负责）。
+//   - 不承载反向代理、路由匹配、负载均衡或配置解析等业务逻辑；
+//   - 不直接管理 HTTP Server 的启动和关闭，这些生命周期操作由 Application 负责。
 package main
 
 import (
@@ -23,9 +23,9 @@ import (
 )
 
 func main() {
-	// 从环境变量读取最小启动配置。
-	// Load 返回错误时表示配置存在非法值（如无效 upstream URL 或非正超时），
-	// 必须阻止进程启动。
+	// Load 按“环境变量启动参数 → 严格 YAML → 结构与语义校验 → 强类型编译”的
+	// 固定顺序生成运行时配置。此调用必须位于 bootstrap.New 之前：文件不存在、未知
+	// YAML 字段、无效引用或当前阶段不支持的拓扑都应在创建 listener 前终止启动。
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("网关配置加载失败: %v", err)
