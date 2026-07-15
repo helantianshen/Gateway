@@ -65,7 +65,7 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 | 1 | 最小反向代理链路 | 4–6 天 | MVP | 一个请求可稳定代理到 mock upstream，代理契约被测试固定 |
 | 2 | 配置模型与严格 YAML | 4–6 天 | MVP | YAML 可校验并驱动代理，不合法配置拒绝启动 |
 | 3 | 路由语义与 Radix Tree | 1–2 周 | MVP（已完成） | host/method/path 规范、冲突检测、fuzz、benchmark |
-| 4 | Upstream 与 Round Robin | 1 周 | MVP | 多实例 RR；注入健康状态后正确选择 |
+| 4 | Upstream 与 Round Robin | 1 周 | MVP（已完成） | 多实例 RR；注入健康状态后正确选择 |
 | 5 | 中间件、日志与指标 | 1 周 | MVP | 请求链有统一错误、结构化日志和 Prometheus 指标 |
 | 6 | Gin 控制面与 etcd 发布 | 1–2 周 | 核心版 | validate、CAS publish、config version、复制式 rollback |
 | 7 | Watch、ConfigSnapshot 与 LKG | 1–2 周 | 核心版 | 多次发布不中断请求，失败保留 Last Known Good |
@@ -249,13 +249,24 @@ curl http://localhost:8080/hello
 
 ### 验收标准
 
-- [ ] RR 使用确定性序列和固定样本验证均匀分布；
-- [ ] 通过测试注入 health state 后，unhealthy endpoint 不被选择；
-- [ ] 注入全部 unhealthy 状态时返回 503；
-- [ ] 若实施 SWRR，先验证确定性序列，再对 10,000 次选择设置权重比例容差；
-- [ ] 并发选择无 data race；
-- [ ] 测试不依赖真实时间和随机睡眠；
-- [ ] 基准记录不同 endpoint 数量下的选择开销。
+- [x] RR 使用确定性序列和固定样本验证均匀分布；
+- [x] 通过测试注入 health state 后，unhealthy endpoint 不被选择；
+- [x] 注入全部 unhealthy 状态时返回 503；
+- [x] 本阶段明确不实施 SWRR，weight 继续校验但普通 RR 不读取；
+- [x] 并发选择无 data race；
+- [x] 测试不依赖真实时间和随机睡眠；
+- [x] 基准记录 1/10/100 endpoint、稀疏健康集合和并行选择开销。
+
+### 实施结果（2026-07-15）
+
+- `CompiledUpstream`、`CompiledEndpoint` 与独立原子 `EndpointState` 已接入数据面；
+- Round Robin 使用单调 `atomic.Uint64` + CAS，健康集合内确定性轮转；
+- 全不健康返回 `503 NO_HEALTHY_UPSTREAM`，不执行 RoundTrip；
+- endpoint active request 覆盖普通、阻塞和取消路径；
+- Gateway Context 同时提供 Route Match 与实际 Endpoint Selection；
+- 真实三实例序列验证为 `mock-1, mock-2, mock-3, mock-1, mock-2, mock-3`；
+- 本机纯 RR 健康选择约 `4.4–5.7 ns/op`，完整 Upstream 选择约 `7.2–8.1 ns/op`；100 节点最坏扫描约 `260 ns/op`，均为 `0 allocs/op`；
+- 原始结果保存于 `benchmarks/results/balancer/bench.txt`。
 
 ---
 

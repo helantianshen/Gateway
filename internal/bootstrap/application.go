@@ -7,7 +7,7 @@
 //   - Shutdown 时关闭 Transport 的 idle 连接，防止资源泄漏。
 //
 // 非职责（本轮明确不实现）：
-//   - 不实现负载均衡、限流等 Phase 4+ 功能；
+//   - 不实现主动健康检查、SWRR、重试或限流；
 //   - 不实现配置热更新和动态配置；
 //   - 不实现可观测性（日志/指标/Trace）。
 package bootstrap
@@ -24,6 +24,7 @@ import (
 	"github.com/helantianshen/gateway/internal/dataplane/gateway"
 	"github.com/helantianshen/gateway/internal/dataplane/server"
 	"github.com/helantianshen/gateway/internal/dataplane/transport"
+	"github.com/helantianshen/gateway/internal/dataplane/upstream"
 	"github.com/helantianshen/gateway/internal/router"
 )
 
@@ -36,6 +37,7 @@ type Application struct {
 	adminListener  net.Listener
 	transport      *http.Transport
 	router         *router.Router
+	upstreams      map[string]*upstream.CompiledUpstream
 	config         *config.Config
 }
 
@@ -49,10 +51,10 @@ type listenFunc func(network, address string) (net.Listener, error)
 // 该函数在返回前完成以下工作：
 //  1. 创建应用级共享 Transport；
 //  2. 将 ConfigSpec.Routes 编译为不可变 Router（含冲突检测和静态边压缩）；
-//  3. 创建 GatewayHandler（使用 Router、upstream URL map、共享 Transport 和请求超时）；
-//  4. 创建 admin Handler（/livez、/readyz）；
-//  5. 创建 public 和 admin TCP 监听器；
-//  6. 创建配置了安全超时的 public 和 admin HTTP Server。
+//  3. 按路由实际使用的 Host 模式编译多 endpoint Upstream 和固定目标 Proxy；
+//  4. 创建 GatewayHandler（使用 Router 和 CompiledUpstream map）；
+//  5. 创建 admin Handler（/livez、/readyz）；
+//  6. 创建 public 和 admin TCP 监听器与 HTTP Server。
 //
 // 如果端口被占用会立即返回错误，而不是延迟到 Run 时才发现。
 // 如果路由编译失败（路径语法错误、冲突等），同样立即返回错误。
@@ -105,27 +107,54 @@ func newWithListen(cfg *config.Config, listen listenFunc) (*Application, error) 
 	if err != nil {
 		return nil, fmt.Errorf("创建 Application 失败: 路由编译失败: %w", err)
 	}
-	for upstreamID, target := range cfg.UpstreamURLs {
-		if target == nil {
-			return nil, fmt.Errorf("创建 Application 失败: upstream %q 的编译目标不能为空", upstreamID)
-		}
-	}
+	// 从路由表推导每个逻辑 upstream 实际需要的 Proxy Host 模式，同时再次验证
+	// Router 的 UpstreamID 与强类型 target map 一致。未被路由引用的 upstream 仍会
+	// 编译 endpoint/state，但不会创建无用 Proxy。
+	proxyModes := make(map[string]upstream.ProxyMode, len(cfg.Upstreams))
 	for _, route := range cfg.Spec.Routes {
-		if _, exists := cfg.UpstreamURLs[route.Upstream]; !exists {
+		if _, exists := cfg.Upstreams[route.Upstream]; !exists {
 			return nil, fmt.Errorf("创建 Application 失败: 路由 %q 引用的 upstream %q 没有编译目标", route.ID, route.Upstream)
 		}
+		mode := upstream.ProxyModeDefault
+		if route.PreserveHost {
+			mode = upstream.ProxyModePreserveHost
+		}
+		proxyModes[route.Upstream] |= mode
 	}
 
-	// 路由和 upstream 引用全部验证成功后才创建共享 Transport，避免无效配置产生资源。
-	// 该 Transport 在整个应用生命周期内被所有 GatewayHandler 内的 Proxy 复用，
-	// Shutdown 时通过 CloseIdleConnections 释放空闲连接。
+	// 所有路由引用验证成功后才创建共享 Transport。每个 endpoint 的固定目标 Proxy
+	// 都复用该实例；任何 runtime upstream 编译失败都在 listener 创建前返回，并先
+	// 关闭可能产生的 idle connection。
 	tr := transport.New()
+	runtimeUpstreams := make(map[string]*upstream.CompiledUpstream, len(cfg.Upstreams))
+	for upstreamID, target := range cfg.Upstreams {
+		if target.ID != upstreamID {
+			transport.CloseIdleConnections(tr)
+			return nil, fmt.Errorf("创建 Application 失败: upstream map key %q 与编译 ID %q 不一致", upstreamID, target.ID)
+		}
+		endpointConfigs := make([]upstream.EndpointConfig, 0, len(target.Endpoints))
+		for _, endpoint := range target.Endpoints {
+			endpointConfigs = append(endpointConfigs, upstream.EndpointConfig{
+				ID:     endpoint.ID,
+				Target: endpoint.URL,
+				Weight: endpoint.Weight,
+			})
+		}
+		compiled, compileErr := upstream.NewCompiledUpstream(
+			upstreamID,
+			endpointConfigs,
+			proxyModes[upstreamID],
+			tr,
+			cfg.RequestTimeout,
+		)
+		if compileErr != nil {
+			transport.CloseIdleConnections(tr)
+			return nil, fmt.Errorf("创建 Application 失败: %w", compileErr)
+		}
+		runtimeUpstreams[upstreamID] = compiled
+	}
 
-	// 创建 GatewayHandler。
-	// GatewayHandler 持有 Router 和按 {upstreamID, preserveHost} 预创建的 Proxy map。
-	// 所有 Proxy 共享同一个 Transport，禁止每请求创建 Proxy。
-	// 请求总超时由 cfg.RequestTimeout 控制。
-	gatewayHandler := gateway.NewGatewayHandler(r, cfg.UpstreamURLs, tr, cfg.RequestTimeout)
+	gatewayHandler := gateway.NewGatewayHandler(r, runtimeUpstreams)
 
 	// 创建 admin Handler，提供 /livez 和 /readyz 健康端点。
 	adminHandler := server.NewAdminHandler()
@@ -152,6 +181,7 @@ func newWithListen(cfg *config.Config, listen listenFunc) (*Application, error) 
 		adminListener:  adminListener,
 		transport:      tr,
 		router:         r,
+		upstreams:      runtimeUpstreams,
 		publicServer:   server.NewPublicServer(gatewayHandler),
 		adminServer:    server.NewAdminServer(adminHandler),
 		config:         cfg,

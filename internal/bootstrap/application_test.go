@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -22,19 +23,26 @@ import (
 const testOperationTimeout = 5 * time.Second
 
 // testConfig 创建用于 bootstrap 测试的最小 Config。
-// unsupported scheme 会让 public 代理在 RoundTrip 前确定性失败并返回 502，既能验证
-// public HTTP Server 确实可访问，也不会为 bootstrap 测试创建 TCP upstream 或连接。
+// TCP 端口 0 不会有监听服务，public 代理会确定性返回 502；这既验证
+// public HTTP Server 可访问，也避免为一般生命周期测试额外创建 upstream。
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
-	u, err := url.Parse("unsupported://upstream")
+	u, err := url.Parse("http://127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("解析测试 upstream URL 失败: %v", err)
 	}
 
 	return &config.Config{
-		PublicAddr:      "127.0.0.1:0",
-		AdminAddr:       "127.0.0.1:0",
-		UpstreamURLs:    map[string]*url.URL{"mock-service": u},
+		PublicAddr: "127.0.0.1:0",
+		AdminAddr:  "127.0.0.1:0",
+		Upstreams: map[string]config.UpstreamTarget{
+			"mock-service": {
+				ID: "mock-service",
+				Endpoints: []config.EndpointTarget{{
+					ID: "mock-1", URL: *u, Weight: 100,
+				}},
+			},
+		},
 		RequestTimeout:  testOperationTimeout,
 		ShutdownTimeout: testOperationTimeout,
 		Spec: &config.ConfigSpec{
@@ -43,7 +51,7 @@ func testConfig(t *testing.T) *config.Config {
 				ID: "mock-service",
 				Endpoints: []config.EndpointSpec{{
 					ID:     "mock-1",
-					URL:    "unsupported://upstream",
+					URL:    "http://127.0.0.1:0",
 					Weight: 100,
 				}},
 			}},
@@ -294,10 +302,13 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	})
 
 	cfg := testConfig(t)
-	cfg.UpstreamURLs["mock-service"], err = url.Parse("http://upstream.local")
+	parsedTarget, err := url.Parse("http://upstream.local")
 	if err != nil {
 		t.Fatalf("解析合法 upstream URL 失败: %v", err)
 	}
+	target := cfg.Upstreams["mock-service"]
+	target.Endpoints[0].URL = *parsedTarget
+	cfg.Upstreams["mock-service"] = target
 	app, err := newWithListen(cfg, newUnixListenFunc(t))
 	if err != nil {
 		t.Fatalf("newWithListen 失败: %v", err)
@@ -438,15 +449,25 @@ func TestApplication_New_NilDependencies(t *testing.T) {
 	}
 
 	missingTarget := testConfig(t)
-	delete(missingTarget.UpstreamURLs, "mock-service")
+	delete(missingTarget.Upstreams, "mock-service")
 	if _, err := newWithListen(missingTarget, neverListen); err == nil || !strings.Contains(err.Error(), "没有编译目标") {
 		t.Fatalf("缺失 upstream target 错误 = %v", err)
 	}
 
-	nilTarget := testConfig(t)
-	nilTarget.UpstreamURLs["mock-service"] = nil
-	if _, err := newWithListen(nilTarget, neverListen); err == nil || !strings.Contains(err.Error(), "编译目标不能为空") {
-		t.Fatalf("nil upstream target 错误 = %v", err)
+	mismatchedTarget := testConfig(t)
+	target := mismatchedTarget.Upstreams["mock-service"]
+	target.ID = "other"
+	mismatchedTarget.Upstreams["mock-service"] = target
+	if _, err := newWithListen(mismatchedTarget, neverListen); err == nil || !strings.Contains(err.Error(), "map key") {
+		t.Fatalf("upstream ID 不一致错误 = %v", err)
+	}
+
+	emptyEndpoints := testConfig(t)
+	target = emptyEndpoints.Upstreams["mock-service"]
+	target.Endpoints = nil
+	emptyEndpoints.Upstreams["mock-service"] = target
+	if _, err := newWithListen(emptyEndpoints, neverListen); err == nil || !strings.Contains(err.Error(), "至少需要一个 endpoint") {
+		t.Fatalf("空 endpoint runtime target 错误 = %v", err)
 	}
 }
 
@@ -755,16 +776,23 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 		}
 	}
 
-	// 构造一个合法的 Phase 3 Config，upstream URL 指向 Unix socket 不可直达的地址；
+	// 构造一个合法的 Phase 4 Config，upstream target 指向 Unix socket 不可直达的地址；
 	// 通过覆盖共享 Transport DialContext 将其重定向到 Unix socket。
 	upstreamURL, err := url.Parse("http://upstream.local")
 	if err != nil {
 		t.Fatalf("解析 upstream URL 失败: %v", err)
 	}
 	cfg := &config.Config{
-		PublicAddr:      "127.0.0.1:0",
-		AdminAddr:       "127.0.0.1:0",
-		UpstreamURLs:    map[string]*url.URL{"mock-service": upstreamURL},
+		PublicAddr: "127.0.0.1:0",
+		AdminAddr:  "127.0.0.1:0",
+		Upstreams: map[string]config.UpstreamTarget{
+			"mock-service": {
+				ID: "mock-service",
+				Endpoints: []config.EndpointTarget{{
+					ID: "mock-1", URL: *upstreamURL, Weight: 100,
+				}},
+			},
+		},
 		RequestTimeout:  testOperationTimeout,
 		ShutdownTimeout: testOperationTimeout,
 		Spec: &config.ConfigSpec{
@@ -819,6 +847,81 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 	adminStatus, _ := getAndRead(t, adminClient, "http://admin.local/livez")
 	if adminStatus != http.StatusOK {
 		t.Fatalf("admin /livez 状态码 = %d, want %d", adminStatus, http.StatusOK)
+	}
+
+	cancel()
+	waitForRun(t, runDone)
+}
+
+func TestApplication_MultipleEndpointsRoundRobinAndProxyModes(t *testing.T) {
+	newEndpointServer := func(id string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = fmt.Fprintf(w, "%s|%s", id, r.Host)
+		}))
+	}
+	endpointA := newEndpointServer("a")
+	defer endpointA.Close()
+	endpointB := newEndpointServer("b")
+	defer endpointB.Close()
+
+	urlA, err := url.Parse(endpointA.URL)
+	if err != nil {
+		t.Fatalf("解析 endpoint A URL: %v", err)
+	}
+	urlB, err := url.Parse(endpointB.URL)
+	if err != nil {
+		t.Fatalf("解析 endpoint B URL: %v", err)
+	}
+
+	cfg := testConfig(t)
+	cfg.Upstreams["mock-service"] = config.UpstreamTarget{
+		ID: "mock-service",
+		Endpoints: []config.EndpointTarget{
+			{ID: "a", URL: *urlA, Weight: 100},
+			{ID: "b", URL: *urlB, Weight: 1},
+		},
+	}
+	cfg.Spec.Upstreams[0].Endpoints = []config.EndpointSpec{
+		{ID: "a", URL: endpointA.URL, Weight: 100},
+		{ID: "b", URL: endpointB.URL, Weight: 1},
+	}
+	cfg.Spec.Routes = []config.RouteSpec{
+		{ID: "default-host", Method: http.MethodGet, Path: "/default", Upstream: "mock-service"},
+		{ID: "preserve-host", Method: http.MethodGet, Path: "/preserve", Upstream: "mock-service", PreserveHost: true},
+	}
+
+	app, err := newWithListen(cfg, newUnixListenFunc(t))
+	if err != nil {
+		t.Fatalf("newWithListen 失败: %v", err)
+	}
+	app.transport.Proxy = nil
+	if compiled := app.upstreams["mock-service"]; compiled == nil || compiled.EndpointCount() != 2 {
+		t.Fatalf("运行时 endpoint pool = %#v", compiled)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- app.Run(ctx) }()
+
+	client := newUnixHTTPClient(t, app.PublicAddr().String())
+	wantDefault := []string{
+		"a|" + urlA.Host,
+		"b|" + urlB.Host,
+		"a|" + urlA.Host,
+		"b|" + urlB.Host,
+	}
+	for index, wantBody := range wantDefault {
+		status, body := getAndRead(t, client, "http://public.local/default")
+		if status != http.StatusOK || body != wantBody {
+			t.Fatalf("第 %d 次默认 Host 请求 = (%d, %q), want (200, %q)", index, status, body, wantBody)
+		}
+	}
+
+	// cursor 在四次请求后回到 endpoint A；该路由必须使用创建期预编译的 preserveHost Proxy。
+	status, body := getAndRead(t, client, "http://public.local/preserve")
+	if status != http.StatusOK || body != "a|public.local" {
+		t.Fatalf("preserveHost 请求 = (%d, %q), want (200, %q)", status, body, "a|public.local")
 	}
 
 	cancel()

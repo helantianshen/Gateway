@@ -1,6 +1,6 @@
-# Gateway Phase 3 可直接运行的示例配置。
-# 只需执行 `make run-mock` 和 `make run-gateway`；所有路由都指向同一个 mock-service。
-# 多 upstream 分发由集成测试覆盖。每个 upstream 仍只允许一个 endpoint（Phase 4 解除）。
+# Gateway Phase 4 可直接运行的示例配置。
+# 先分别启动 :18080、:18081、:18082 上的三个 mock-service，再启动 Gateway。
+# 同一逻辑 upstream 的三个 endpoint 使用普通 Round Robin；当前不按 weight 加权。
 api_version: v1
 
 upstreams:
@@ -8,7 +8,12 @@ upstreams:
     endpoints:
       - id: mock-1
         url: http://127.0.0.1:18080
-        # weight 省略时默认取 100；Phase 3 校验但不执行负载均衡。
+        weight: 100
+      - id: mock-2
+        url: http://127.0.0.1:18081
+        weight: 100
+      - id: mock-3
+        url: http://127.0.0.1:18082
         weight: 100
 
 routes:
@@ -61,6 +66,6 @@ routes:
 
 policies:
   request_timeout: 3s
-  # rate 与 burst 在 Phase 3 仅解析和校验，尚不执行限流。
+  # rate 与 burst 在 Phase 4 仅解析和校验，尚不执行限流。
   rate: 0
   burst: 0

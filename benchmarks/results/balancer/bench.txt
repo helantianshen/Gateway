@@ -1,0 +1,45 @@
+goos: linux
+goarch: amd64
+pkg: github.com/helantianshen/gateway/internal/dataplane/balancer
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
+BenchmarkRoundRobin/healthy_1-16  	268334365	         5.145 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_1-16  	219625497	         4.889 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_1-16  	268323680	         4.877 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	235949988	         4.876 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	263674992	         5.015 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	254596286	         5.741 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	227680828	         4.537 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	274704220	         4.406 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	239547591	         5.054 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 6010885	       203.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 5275600	       196.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 6132675	       202.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 8373910	       131.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 7983355	       149.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 8587228	       137.9 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	24.694s
+goos: linux
+goarch: amd64
+pkg: github.com/helantianshen/gateway/internal/dataplane/upstream
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	160218519	         7.306 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	154424452	         7.196 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	161432329	         7.213 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	175094161	         7.158 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	159024180	         8.085 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	155489806	         8.093 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	165140767	         7.378 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	170225616	         7.236 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	161589640	         7.307 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 5127799	       259.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4589121	       259.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4229068	       263.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 6650223	       181.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 6117865	       190.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 6264730	       200.9 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	26.281s
+Go version: go version go1.26.3 linux/amd64
+Date: 2026-07-15T14:50:34Z
+Command: go test -run=^$ -bench='Benchmark(RoundRobin|CompiledUpstreamSelect)' -benchmem -count=3 ./internal/dataplane/balancer/ ./internal/dataplane/upstream/

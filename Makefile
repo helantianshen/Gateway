@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check vet test race build run run-mock run-gateway bench fuzz fuzz-path fuzz-conflict fuzz-match
+.PHONY: fmt fmt-check vet test race build run run-mock run-mock-1 run-mock-2 run-mock-3 run-gateway bench bench-balancer fuzz fuzz-path fuzz-conflict fuzz-match
 
 FUZZTIME ?= 15s
 
@@ -36,9 +36,17 @@ run-gateway:
 	@echo "使用配置文件: $${GATEWAY_CONFIG_FILE:-configs/gateway.yaml}"
 	go run ./cmd/gateway
 
-# 运行 mock-service 进程，用于演示和测试反向代理
-run-mock:
-	go run ./cmd/mock-service
+# 运行默认 mock-service；Phase 4 多 endpoint 演示需在三个终端分别运行 1/2/3。
+run-mock: run-mock-1
+
+run-mock-1:
+	go run ./cmd/mock-service -addr :18080 -id mock-1
+
+run-mock-2:
+	go run ./cmd/mock-service -addr :18081 -id mock-2
+
+run-mock-3:
+	go run ./cmd/mock-service -addr :18082 -id mock-3
 
 # 运行 router benchmark，结果保存到 benchmarks/results/router/
 bench:
@@ -47,6 +55,16 @@ bench:
 	@echo "Go version: $$(go version)" >> benchmarks/results/router/bench.txt
 	@echo "Date: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> benchmarks/results/router/bench.txt
 	@echo "Command: go test -bench=. -benchmem -count=3 -run=^$$ ./internal/router/" >> benchmarks/results/router/bench.txt
+
+# 运行 Round Robin benchmark，结果保存到 benchmarks/results/balancer/
+bench-balancer:
+	@mkdir -p benchmarks/results/balancer
+	@output=benchmarks/results/balancer/bench.txt; \
+	go test -run=^$$ -bench='Benchmark(RoundRobin|CompiledUpstreamSelect)' -benchmem -count=3 \
+		./internal/dataplane/balancer/ ./internal/dataplane/upstream/ >$$output 2>&1; \
+	status=$$?; cat $$output; echo "Go version: $$(go version)" >> $$output; \
+	echo "Date: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $$output; \
+	echo "Command: go test -run=^$$ -bench='Benchmark(RoundRobin|CompiledUpstreamSelect)' -benchmem -count=3 ./internal/dataplane/balancer/ ./internal/dataplane/upstream/" >> $$output; exit $$status
 
 # 运行路径模式解析 fuzz 测试并保存原始输出
 fuzz-path:

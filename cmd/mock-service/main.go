@@ -17,12 +17,19 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
+const mockInstanceHeader = "X-Mock-Instance"
+
 func main() {
 	addr := flag.String("addr", ":18080", "监听地址")
+	instanceID := flag.String("id", "mock-1", "实例 ID（通过 X-Mock-Instance 响应头返回）")
 	flag.Parse()
+	if strings.TrimSpace(*instanceID) == "" {
+		log.Fatal("mock-service 实例 ID 不能为空")
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hello", handleHello)
@@ -30,10 +37,19 @@ func main() {
 	mux.HandleFunc("/slow", handleSlow)
 	mux.HandleFunc("/stream", handleStream)
 
-	log.Printf("mock-service 启动于 %s", *addr)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	log.Printf("mock-service %s 启动于 %s", *instanceID, *addr)
+	if err := http.ListenAndServe(*addr, withInstanceID(*instanceID, mux)); err != nil {
 		log.Fatalf("mock-service 启动失败: %v", err)
 	}
+}
+
+// withInstanceID 为所有响应写入稳定实例 ID，便于通过真实 HTTP 请求观察网关的
+// endpoint 选择序列。该标识只属于本地 mock-service，不由 Gateway 注入。
+func withInstanceID(instanceID string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(mockInstanceHeader, instanceID)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // handleHello 返回 JSON 格式的问候语。

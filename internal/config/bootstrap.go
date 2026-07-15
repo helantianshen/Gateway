@@ -6,7 +6,8 @@
 //   - Phase 0/1 的 upstream URL 和请求超时环境变量已移除，若仍设置会返回迁移错误。
 //
 // 本包完成静态加载、严格校验和强类型 upstream 编译，并调用生产 Router 编译器校验
-// 路由集合；请求侧匹配由数据面执行。本包不实现 Phase 4 负载均衡、动态配置或配置中心。
+// 路由集合；请求侧匹配与负载均衡由数据面执行。本包不持有 endpoint 运行状态，
+// 也不实现动态配置或配置中心。
 package config
 
 import (
@@ -45,15 +46,26 @@ type BootstrapConfig struct {
 	ShutdownTimeout time.Duration
 }
 
+// EndpointTarget 是配置层编译后的不可变 endpoint 定义。
+// URL 使用值类型，避免运行时保留可被调用方替换的 *url.URL 指针。
+type EndpointTarget struct {
+	ID     string
+	URL    url.URL
+	Weight int
+}
+
+// UpstreamTarget 是逻辑 upstream 的强类型 endpoint 集合。
+type UpstreamTarget struct {
+	ID        string
+	Endpoints []EndpointTarget
+}
+
 // Config 是经过完整校验、可直接交给 Application 的强类型运行时配置。
-//
-// Phase 3 将 UpstreamURL 替换为 UpstreamURLs map，支持多 upstream 多路由。
-// Application 从 UpstreamURLs 和 Spec.Routes 构建 Router 和 GatewayHandler。
-// Spec 保留完整且已校验的声明式配置，供后续阶段读取。
+// Application 从 Upstreams 构建 endpoint pool，从 Spec.Routes 构建 Router。
 type Config struct {
 	PublicAddr      string
 	AdminAddr       string
-	UpstreamURLs    map[string]*url.URL // upstream ID → endpoint URL（Phase 3 每个 upstream 恰好一个 endpoint）
+	Upstreams       map[string]UpstreamTarget
 	RequestTimeout  time.Duration
 	ShutdownTimeout time.Duration
 	Spec            *ConfigSpec
@@ -128,11 +140,11 @@ func readStringEnv(key string, target *string, problems *[]string) {
 
 // Compile 把完整 ConfigSpec 与本地 BootstrapConfig 编译成 Application 使用的 Config。
 // Validate 由 Compile 自身调用，确保直接使用该公开入口的调用方也无法绕过结构、语义
-// 或 Phase 3 运行约束。Validate 成功后再做 URL 和 duration 的强类型转换；转换失败
+// 或 Phase 4 运行约束。Validate 成功后再做 URL 和 duration 的强类型转换；转换失败
 // 理论上不可达，仍保留防御性错误以防未来校验规则与编译逻辑发生偏移。
 //
-// Phase 3：从所有 upstream 提取 endpoint URL，生成 UpstreamURLs map，不再只取第一条 route。
-// 路由语法和冲突检测由 Application 调用 router.Compile 完成。
+// Phase 4：从所有 upstream 提取全部 endpoint，生成强类型 Upstreams map。
+// 路由语法和冲突检测由 Validate 与 Application 共同调用 router.Compile 完成。
 func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 	file := bootstrap.ConfigFile
 	if err := Validate(spec, file); err != nil {
@@ -148,19 +160,29 @@ func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 		return nil, fmt.Errorf("编译配置失败: shutdown 超时必须为正数")
 	}
 
-	// 为每个 upstream 提取唯一 endpoint URL，生成 upstream target map。
-	// Phase 3 保证每个 upstream 恰好一个 endpoint（由 Validate 强制）。
-	upstreamURLs := make(map[string]*url.URL, len(spec.Upstreams))
+	// 为每个 upstream 深拷贝全部 endpoint 定义。URL 在 Validate 后理论上都可解析；
+	// 仍保留防御性错误，避免未来校验与编译规则漂移。
+	upstreams := make(map[string]UpstreamTarget, len(spec.Upstreams))
 	for _, upstream := range spec.Upstreams {
-		if len(upstream.Endpoints) != 1 {
-			// 理论上不可达：Validate 已拒绝非单 endpoint 的 upstream。
-			return nil, fmt.Errorf("编译配置失败: upstream %q 的 endpoint 数量不合法", upstream.ID)
+		if len(upstream.Endpoints) == 0 {
+			return nil, fmt.Errorf("编译配置失败: upstream %q 至少需要一个 endpoint", upstream.ID)
 		}
-		parsed, err := url.Parse(upstream.Endpoints[0].URL)
-		if err != nil {
-			return nil, fmt.Errorf("编译配置失败: upstream %q 的 endpoint URL 无法解析: %w", upstream.ID, err)
+		target := UpstreamTarget{
+			ID:        upstream.ID,
+			Endpoints: make([]EndpointTarget, 0, len(upstream.Endpoints)),
 		}
-		upstreamURLs[upstream.ID] = parsed
+		for _, endpoint := range upstream.Endpoints {
+			parsed, err := url.Parse(endpoint.URL)
+			if err != nil {
+				return nil, fmt.Errorf("编译配置失败: upstream %q 的 endpoint %q URL 无法解析: %w", upstream.ID, endpoint.ID, err)
+			}
+			target.Endpoints = append(target.Endpoints, EndpointTarget{
+				ID:     endpoint.ID,
+				URL:    *parsed,
+				Weight: endpoint.Weight,
+			})
+		}
+		upstreams[upstream.ID] = target
 	}
 
 	requestTimeout, err := time.ParseDuration(spec.Policies.RequestTimeout)
@@ -171,7 +193,7 @@ func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 	return &Config{
 		PublicAddr:      bootstrap.PublicAddr,
 		AdminAddr:       bootstrap.AdminAddr,
-		UpstreamURLs:    upstreamURLs,
+		Upstreams:       upstreams,
 		RequestTimeout:  requestTimeout,
 		ShutdownTimeout: bootstrap.ShutdownTimeout,
 		Spec:            spec,

@@ -1,8 +1,8 @@
 # Gateway
 
-一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、连接池复用、统一错误处理和自研不可变压缩 Radix Tree 路由匹配。
+一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、共享连接池、自研不可变压缩 Radix Tree 路由，以及并发安全的健康感知 Round Robin。
 
-> 当前版本：**Phase 3** — 路由语义与 Radix Tree
+> 当前版本：**Phase 4** — Upstream Pool 与 Round Robin
 
 ## 架构
 
@@ -19,10 +19,12 @@
 │  │  ├─ Router.Match（Host → Method → Path）     │
 │  │  ├─ 400 Bad Request（非法路径）              │
 │  │  ├─ 404 Not Found（无匹配路由）              │
-│  │  └─ 委托给固定目标 Proxy                      │
-│  │     ├─ Rewrite（SetURL + 转发头 + preserveHost）│
-│  │     ├─ 请求总超时 (Context)                    │
-│  │     └─ 502 / 504 错误分类                     │
+│  │  └─ CompiledUpstream.Select（健康过滤 + RR）   │
+│  │     ├─ 无健康 endpoint → 503                  │
+│  │     └─ 固定 endpoint Proxy                    │
+│  │        ├─ Rewrite（SetURL + preserveHost）     │
+│  │        ├─ 请求总超时 (Context)                │
+│  │        └─ 502 / 504 错误分类                  │
 │  │              │                               │
 │  │              ▼                               │
 │  共享 http.Transport                            │
@@ -41,17 +43,29 @@ upstream 服务
 
 ## 快速开始
 
-```bash
-# 终端 1：启动 mock-service（默认监听 :18080）
-make run-mock
+默认配置包含三个 mock endpoint，需要分别启动三个进程：
 
-# 终端 2：使用默认 configs/gateway.yaml 启动 gateway
+```bash
+# 终端 1 / 2 / 3
+make run-mock-1  # :18080, X-Mock-Instance: mock-1
+make run-mock-2  # :18081, X-Mock-Instance: mock-2
+make run-mock-3  # :18082, X-Mock-Instance: mock-3
+
+# 终端 4：使用默认 configs/gateway.yaml 启动 gateway
 make run-gateway
 ```
 
-验证路由匹配（默认配置只依赖上述一个 mock-service）：
+若本机设置了 `HTTP_PROXY`/`HTTPS_PROXY`，下面的本地 curl 命令应追加 `--noproxy '*'`，避免自定义 `Host` 被代理软件截获。
+
+验证 Round Robin 和路由匹配：
 
 ```bash
+# 连续六次请求的 X-Mock-Instance 应为 mock-1/2/3/1/2/3
+for i in 1 2 3 4 5 6; do
+  curl -sD - -o /dev/null 'http://127.0.0.1:8080/hello?name=gateway' \
+    | grep -i '^X-Mock-Instance:'
+done
+
 # 精确 GET 路由
 curl -i 'http://127.0.0.1:8080/hello?name=gateway'
 
@@ -80,7 +94,7 @@ curl -i http://127.0.0.1:9090/readyz
 
 ## 配置
 
-Phase 3 将配置明确分为两类：YAML 是 upstream、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
+YAML 是 upstream、endpoint、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认 Phase 4 示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
 
 ### YAML 业务配置
 
@@ -92,6 +106,12 @@ upstreams:
     endpoints:
       - id: mock-1
         url: http://127.0.0.1:18080
+        weight: 100
+      - id: mock-2
+        url: http://127.0.0.1:18081
+        weight: 100
+      - id: mock-3
+        url: http://127.0.0.1:18082
         weight: 100
 
 routes:
@@ -135,10 +155,10 @@ policies:
 - upstream、endpoint 和 route 的 ID 必须非空，并在各自作用域内唯一；
 - route 引用的 upstream 必须存在；
 - endpoint URL 必须是带 host 的 `http` 或 `https` 绝对 URL，且不允许包含 userinfo；
-- `weight` 必须为正整数，省略时默认取 `100`；
+- 每个 upstream 至少包含一个 endpoint；
+- `weight` 必须为正整数，省略时默认取 `100`；Phase 4 普通 RR 不读取权重，SWRR 属于扩展阶段；
 - `request_timeout` 必须是正数 Go duration；
-- `rate` 和 `burst` 必须为非负整数；
-- 每个 upstream 恰好包含一个 endpoint（Phase 4 将解除多 endpoint 限制）。
+- `rate` 和 `burst` 必须为非负整数。
 
 路由配置还经过 `router.Compile` 的语法校验和冲突检测：
 
@@ -169,12 +189,14 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │   ├── gateway/            # 网关进程入口
 │   └── mock-service/       # 本地演示 upstream
 ├── configs/
-│   └── gateway.yaml        # Phase 3 默认 YAML 示例配置
+│   └── gateway.yaml        # Phase 4 三 endpoint YAML 示例配置
 ├── internal/
 │   ├── bootstrap/          # 应用生命周期：双 Server、Router、GatewayHandler、Run、Graceful Shutdown
 │   ├── config/             # 严格 YAML、启动参数、校验与强类型编译
 │   ├── dataplane/
-│   │   ├── gateway/        # GatewayHandler：ParsePath → Router.Match → 委托 Proxy
+│   │   ├── gateway/        # ParsePath → Router → Upstream → Endpoint Proxy
+│   │   ├── balancer/       # 原子 CAS Round Robin
+│   │   ├── upstream/       # CompiledUpstream、EndpointState 与 active request
 │   │   ├── proxy/          # httputil.ReverseProxy 封装（含 preserveHost）
 │   │   ├── server/         # HTTP Server 与健康端点
 │   │   ├── transport/      # 共享 http.Transport
@@ -192,16 +214,19 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │       ├── fuzz_test.go    # Fuzz 测试
 │       └── bench_test.go   # Benchmark
 ├── benchmarks/
-│   └── results/router/     # 原始 benchmark 结果
+│   └── results/
+│       ├── router/         # Router benchmark 与 fuzz 原始结果
+│       └── balancer/       # Round Robin benchmark 原始结果
 ├── docs/
 │   ├── 01-technology-selection.md
 │   ├── 02-architecture-design.md
 │   ├── 03-development-roadmap.md
 │   ├── 04-phase-0-1-implementation-plan.md
 │   ├── 05-phase-2-implementation-plan.md
-│   └── 06-phase-3-implementation-plan.md
+│   ├── 06-phase-3-implementation-plan.md
+│   └── 07-phase-4-implementation-plan.md
 ├── .github/workflows/ci.yml
-├── Makefile                # fmt / vet / test / race / build / bench / fuzz
+├── Makefile                # fmt / vet / test / race / build / benchmark / fuzz
 ├── go.mod
 ├── LICENSE                 # MIT
 └── CONTRIBUTING.md
@@ -234,9 +259,15 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 
 非法路径返回 `400 Bad Request`，无匹配路由返回 `404 Not Found`。
 
+### Upstream 与 Round Robin
+
+Router 只返回逻辑 `UpstreamID`；`CompiledUpstream` 再用私有 Round Robin cursor 从 endpoint pool 中选择健康节点。普通 RR 使用单调 `atomic.Uint64` 和 CAS，把 cursor 推进到实际选中位置之后：固定健康集合的序列确定，并发请求不会消费同一游标状态。选择热路径不分配内存。
+
+`CompiledEndpoint` 的 ID、URL、weight 和 Proxy 在启动后不变；独立 `EndpointState` 用 atomic 保存 healthy 与 active request。Phase 4 默认全部健康，测试可注入状态；主动健康检查在 Phase 8 接入同一状态对象。所有 endpoint 不健康时立即返回 503，不等待且不重试。
+
 ### preserveHost
 
-`preserve_host: true` 时，Proxy 的 `Rewrite` 在 `SetURL` 之后恢复客户端原始 Host 头，使 upstream 收到的 Host 与客户端请求一致。每个 `{upstreamID, preserveHost}` 组合在启动时预创建一个固定目标 Proxy，禁止每请求创建 Proxy。
+`preserve_host: true` 时，Proxy 的 `Rewrite` 在 `SetURL` 之后恢复客户端原始 Host 头，使 upstream 收到的 Host 与客户端请求一致。Application 只为路由实际使用的 `{upstreamID, preserveHost}` 模式预创建每个 endpoint 的固定目标 Proxy；所有 Proxy 共享同一个 Transport，禁止每请求创建。
 
 ### 错误分类
 
@@ -244,6 +275,7 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 |---|---|---|
 | 非法路径（编码斜杠、dot segment） | 400 | `ParsePath` 检测到非法编码 |
 | 无匹配路由 | 404 | `Router.Match` 未找到路由 |
+| 逻辑 upstream 的所有 endpoint 不健康 | 503 | `NO_HEALTHY_UPSTREAM`，不执行 RoundTrip |
 | upstream 连接失败 | 502 | 网络或协议错误 |
 | upstream 超时 | 504 | 响应头超时或请求总超时 |
 | 响应头已写出后中断 | 原状态码 | 不二次改写，客户端收到部分响应 |
@@ -270,10 +302,13 @@ make race
 # 构建
 make build
 
-# Benchmark（结果保存到 benchmarks/results/router/）
+# Router Benchmark（结果保存到 benchmarks/results/router/）
 make bench
 
-# Fuzz 测试（各 15 秒）
+# Round Robin Benchmark（结果保存到 benchmarks/results/balancer/）
+make bench-balancer
+
+# Router Fuzz 测试（各 15 秒）
 make fuzz
 
 # 一键全部检查
@@ -282,7 +317,7 @@ make fmt-check vet test race build
 
 ## 技术约束
 
-数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。Phase 3 的路由匹配器完全自研，不引入第三方路由框架。本阶段不实现多 endpoint 负载均衡、动态配置、限流执行或路径 rewrite。
+数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。路由匹配器和普通 Round Robin 均为项目内实现，不引入第三方路由或负载均衡框架。Phase 4 不实现主动健康检查、SWRR、重试、动态配置、限流执行或路径 rewrite。
 
 ## 开发路线
 
@@ -292,7 +327,7 @@ make fmt-check vet test race build
 | 1 | 最小反向代理链路 | ✅ 完成 |
 | 2 | 配置模型与严格 YAML | ✅ 完成 |
 | 3 | 路由语义与 Radix Tree | ✅ 完成 |
-| 4 | Upstream 与 Round Robin | — |
+| 4 | Upstream 与 Round Robin | ✅ 完成 |
 | 5 | 中间件、日志与 Prometheus | — |
 | 6 | Gin 控制面与 etcd 发布 | — |
 | 7 | Watch、ConfigSnapshot 与 LKG | — |

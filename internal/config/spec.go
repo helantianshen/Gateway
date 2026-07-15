@@ -2,9 +2,8 @@ package config
 
 // ConfigSpec 是 gateway YAML 文件的顶层声明式配置。
 //
-// 该模型同时保留 upstream、endpoint 与 route 三个层次：Phase 3 已支持多路由和
-// 多 upstream，但每个 upstream 仍只允许一个 endpoint；Phase 4 将在保持 YAML
-// 结构兼容的前提下解除多 endpoint 限制。
+// 该模型同时保留 upstream、endpoint 与 route 三个层次：Phase 4 支持多路由、
+// 多 upstream 和每个 upstream 的多 endpoint，不需要破坏 YAML 结构。
 type ConfigSpec struct {
 	APIVersion string         `yaml:"api_version"`
 	Upstreams  []UpstreamSpec `yaml:"upstreams"`
@@ -14,8 +13,7 @@ type ConfigSpec struct {
 
 // UpstreamSpec 定义一个逻辑上游及其服务端点集合。
 //
-// Phase 3 要求每个 upstream 恰好一个 endpoint；Endpoints 保持切片形态，是为了让
-// Phase 4 可以直接在同一配置模型上实现负载均衡，而不是重新设计配置格式。
+// Phase 4 要求至少一个 endpoint，并在运行时将该切片编译为不可变 endpoint pool。
 type UpstreamSpec struct {
 	ID        string         `yaml:"id"`
 	Endpoints []EndpointSpec `yaml:"endpoints"`
@@ -44,7 +42,7 @@ type RouteSpec struct {
 }
 
 // PolicySpec 定义当前配置版本中的全局策略。
-// RequestTimeout 参与代理请求总超时；Rate 与 Burst 在 Phase 3 仍只完成严格解析和
+// RequestTimeout 参与代理请求总超时；Rate 与 Burst 在 Phase 4 仍只完成严格解析和
 // 范围校验，限流策略的实际执行属于后续阶段，不会静默启用尚未实现的行为。
 type PolicySpec struct {
 	RequestTimeout string `yaml:"request_timeout"`

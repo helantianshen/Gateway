@@ -173,35 +173,27 @@ func TestValidate_AggregatesAllProblems(t *testing.T) {
 	}
 }
 
-func TestValidate_Phase3RuntimeConstraints(t *testing.T) {
-	tests := []struct {
-		name   string
-		mutate func(*ConfigSpec)
-		want   string
-	}{
-		{name: "no endpoint", mutate: func(s *ConfigSpec) { s.Upstreams[0].Endpoints = nil }, want: "必须恰好包含一个 endpoint"},
-		{name: "multiple endpoints", mutate: func(s *ConfigSpec) {
-			s.Upstreams[0].Endpoints = append(s.Upstreams[0].Endpoints, EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 100})
-		}, want: "必须恰好包含一个 endpoint"},
+func TestValidate_Phase4EndpointConstraints(t *testing.T) {
+	spec := validSpec()
+	spec.Upstreams[0].Endpoints = nil
+	if err := Validate(spec, "phase4.yaml"); err == nil || !strings.Contains(err.Error(), "至少需要配置一个 endpoint") {
+		t.Fatalf("空 endpoint 集合错误 = %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			spec := validSpec()
-			tt.mutate(spec)
-			err := Validate(spec, "phase3.yaml")
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Phase 3 约束错误 = %v, want 包含 %q", err, tt.want)
-			}
-			if !strings.Contains(err.Error(), phase3SingleEndpoint) {
-				t.Errorf("Phase 3 约束错误缺少统一迁移提示: %v", err)
-			}
-		})
+	spec = validSpec()
+	spec.Upstreams[0].Endpoints = append(spec.Upstreams[0].Endpoints,
+		EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 50},
+	)
+	if err := Validate(spec, "phase4.yaml"); err != nil {
+		t.Fatalf("合法多 endpoint 配置返回错误: %v", err)
 	}
 }
 
 func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 	spec := validSpec()
+	spec.Upstreams[0].Endpoints = append(spec.Upstreams[0].Endpoints,
+		EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 50},
+	)
 	bootstrap := BootstrapConfig{
 		ConfigFile:      "compile.yaml",
 		PublicAddr:      ":8081",
@@ -213,8 +205,20 @@ func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile 返回意外错误: %v", err)
 	}
-	if cfg.UpstreamURLs["mock-service"].Scheme != "http" || cfg.UpstreamURLs["mock-service"].Host != "127.0.0.1:18080" {
-		t.Errorf("强类型 UpstreamURLs 错误: %#v", cfg.UpstreamURLs["mock-service"])
+	upstream := cfg.Upstreams["mock-service"]
+	if len(upstream.Endpoints) != 2 {
+		t.Fatalf("编译 endpoint 数量 = %d, want 2", len(upstream.Endpoints))
+	}
+	if upstream.Endpoints[0].URL.Scheme != "http" || upstream.Endpoints[0].URL.Host != "127.0.0.1:18080" {
+		t.Errorf("首个强类型 EndpointTarget 错误: %#v", upstream.Endpoints[0])
+	}
+	if upstream.Endpoints[1].ID != "mock-2" || upstream.Endpoints[1].Weight != 50 {
+		t.Errorf("第二个 EndpointTarget 错误: %#v", upstream.Endpoints[1])
+	}
+	// Config target 必须与 YAML slice 解耦；修改原始 EndpointSpec 不影响已编译值。
+	spec.Upstreams[0].Endpoints[0].URL = "http://mutated.invalid"
+	if upstream.Endpoints[0].URL.Host != "127.0.0.1:18080" {
+		t.Errorf("编译 target 引用了可变 ConfigSpec: %#v", upstream.Endpoints[0])
 	}
 	if cfg.RequestTimeout != 3*time.Second {
 		t.Errorf("RequestTimeout = %v, want 3s", cfg.RequestTimeout)
@@ -226,14 +230,14 @@ func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 
 func TestCompile_CannotBypassValidation(t *testing.T) {
 	spec := validSpec()
-	spec.Upstreams[0].Endpoints = append(spec.Upstreams[0].Endpoints, EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 100})
+	spec.Upstreams[0].Endpoints = nil
 	_, err := Compile(spec, BootstrapConfig{
 		ConfigFile:      "compile.yaml",
 		PublicAddr:      ":8080",
 		AdminAddr:       ":9090",
 		ShutdownTimeout: time.Second,
 	})
-	if err == nil || !strings.Contains(err.Error(), phase3SingleEndpoint) {
-		t.Fatalf("Compile 绕过了 Phase 3 校验: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "至少需要配置一个 endpoint") {
+		t.Fatalf("Compile 绕过了 Phase 4 校验: %v", err)
 	}
 }

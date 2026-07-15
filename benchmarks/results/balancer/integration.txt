@@ -1,0 +1,28 @@
+Phase 4 real-process integration verification
+Date: 2026-07-15T14:46Z
+Go version: go version go1.26.3 linux/amd64
+Environment: linux/amd64, AMD Ryzen 7 7735H with Radeon Graphics
+
+Processes:
+- mock-service -id mock-1 -addr :18080
+- mock-service -id mock-2 -addr :18081
+- mock-service -id mock-3 -addr :18082
+- gateway with configs/gateway.yaml (:8080 / :9090)
+
+Readiness:
+- All three mock /hello endpoints returned 200 before Gateway start.
+- Gateway /readyz returned 200 before data-plane requests.
+
+Verified results:
+- Six GET /hello endpoint headers: mock-1,mock-2,mock-3,mock-1,mock-2,mock-3
+- POST /echo response body: phase4-echo
+- exact Host admin.example.com:8443 + preserve_host selected endpoint: mock-2
+- encoded slash /objects%2F123: 400
+- unmatched DELETE /anything/here: 404
+- SIGTERM graceful shutdown exit status: 0
+
+Notes:
+- curl used --noproxy '*' because the local environment defines HTTP_PROXY/HTTPS_PROXY.
+- The first orchestration attempt started Gateway before every mock listener was ready; the first
+  request correctly returned 502 with no retry. The final run added explicit readiness checks and
+  produced the deterministic sequence above.
