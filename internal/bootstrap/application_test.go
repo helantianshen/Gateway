@@ -34,9 +34,28 @@ func testConfig(t *testing.T) *config.Config {
 	return &config.Config{
 		PublicAddr:      "127.0.0.1:0",
 		AdminAddr:       "127.0.0.1:0",
-		UpstreamURL:     u,
+		UpstreamURLs:    map[string]*url.URL{"mock-service": u},
 		RequestTimeout:  testOperationTimeout,
 		ShutdownTimeout: testOperationTimeout,
+		Spec: &config.ConfigSpec{
+			APIVersion: "v1",
+			Upstreams: []config.UpstreamSpec{{
+				ID: "mock-service",
+				Endpoints: []config.EndpointSpec{{
+					ID:     "mock-1",
+					URL:    "unsupported://upstream",
+					Weight: 100,
+				}},
+			}},
+			Routes: []config.RouteSpec{{
+				ID:       "default",
+				Path:     "/*catch",
+				Upstream: "mock-service",
+			}},
+			Policies: config.PolicySpec{
+				RequestTimeout: "5s",
+			},
+		},
 	}
 }
 
@@ -275,7 +294,7 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	})
 
 	cfg := testConfig(t)
-	cfg.UpstreamURL, err = url.Parse("http://upstream.local")
+	cfg.UpstreamURLs["mock-service"], err = url.Parse("http://upstream.local")
 	if err != nil {
 		t.Fatalf("解析合法 upstream URL 失败: %v", err)
 	}
@@ -396,13 +415,38 @@ func TestApplication_New_NilDependencies(t *testing.T) {
 		t.Fatalf("nil listener factory 错误 = %v, want 明确错误", err)
 	}
 
-	if _, err := newWithListen(nil, func(string, string) (net.Listener, error) {
-		t.Fatal("nil 配置不应调用 listener factory")
+	neverListen := func(string, string) (net.Listener, error) {
+		t.Fatal("无效配置不应调用 listener factory")
 		return nil, nil
-	}); err == nil {
+	}
+	if _, err := newWithListen(nil, neverListen); err == nil {
 		t.Fatal("nil 配置未返回错误")
 	} else if !strings.Contains(err.Error(), "配置不能为空") {
 		t.Fatalf("nil 配置错误 = %v, want 明确错误", err)
+	}
+
+	withoutSpec := testConfig(t)
+	withoutSpec.Spec = nil
+	if _, err := newWithListen(withoutSpec, neverListen); err == nil || !strings.Contains(err.Error(), "声明式配置不能为空") {
+		t.Fatalf("nil Spec 错误 = %v", err)
+	}
+
+	invalidTimeout := testConfig(t)
+	invalidTimeout.RequestTimeout = 0
+	if _, err := newWithListen(invalidTimeout, neverListen); err == nil || !strings.Contains(err.Error(), "请求超时必须为正数") {
+		t.Fatalf("非法请求超时错误 = %v", err)
+	}
+
+	missingTarget := testConfig(t)
+	delete(missingTarget.UpstreamURLs, "mock-service")
+	if _, err := newWithListen(missingTarget, neverListen); err == nil || !strings.Contains(err.Error(), "没有编译目标") {
+		t.Fatalf("缺失 upstream target 错误 = %v", err)
+	}
+
+	nilTarget := testConfig(t)
+	nilTarget.UpstreamURLs["mock-service"] = nil
+	if _, err := newWithListen(nilTarget, neverListen); err == nil || !strings.Contains(err.Error(), "编译目标不能为空") {
+		t.Fatalf("nil upstream target 错误 = %v", err)
 	}
 }
 
@@ -654,9 +698,8 @@ func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
 	}
 }
 
-// TestApplication_ValidYAMLConfigDrivesProxy 验证完整的 Phase 2 配置链路：
-// YAML → config.Load → Config → Application → 反向代理 → upstream。这是 Phase 2
-// 验收标准中“合法 YAML 配置可驱动代理转发请求”的端到端证据。
+// TestApplication_ValidYAMLConfigDrivesProxy 验证完整静态配置链路：
+// Config → Router → GatewayHandler → ReverseProxy → upstream，固定此前阶段的代理契约。
 //
 // 测试使用 Unix socket 作为 upstream，避免占用 TCP 临时端口；通过自定义 Transport
 // DialContext 将 YAML 中配置的 upstream URL 重定向到 Unix socket。
@@ -712,8 +755,8 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 		}
 	}
 
-	// 构造一个合法的 Phase 2 Config，upstream URL 指向 Unix socket 不可直达的地址；
-	// 通过覆盖 Transport DialContext 将其重定向到 Unix socket。
+	// 构造一个合法的 Phase 3 Config，upstream URL 指向 Unix socket 不可直达的地址；
+	// 通过覆盖共享 Transport DialContext 将其重定向到 Unix socket。
 	upstreamURL, err := url.Parse("http://upstream.local")
 	if err != nil {
 		t.Fatalf("解析 upstream URL 失败: %v", err)
@@ -721,9 +764,28 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 	cfg := &config.Config{
 		PublicAddr:      "127.0.0.1:0",
 		AdminAddr:       "127.0.0.1:0",
-		UpstreamURL:     upstreamURL,
+		UpstreamURLs:    map[string]*url.URL{"mock-service": upstreamURL},
 		RequestTimeout:  testOperationTimeout,
 		ShutdownTimeout: testOperationTimeout,
+		Spec: &config.ConfigSpec{
+			APIVersion: "v1",
+			Upstreams: []config.UpstreamSpec{{
+				ID: "mock-service",
+				Endpoints: []config.EndpointSpec{{
+					ID:     "mock-1",
+					URL:    "http://upstream.local",
+					Weight: 100,
+				}},
+			}},
+			Routes: []config.RouteSpec{{
+				ID:       "default",
+				Path:     "/*catch",
+				Upstream: "mock-service",
+			}},
+			Policies: config.PolicySpec{
+				RequestTimeout: "5s",
+			},
+		},
 	}
 
 	app, err := newWithListen(cfg, listen)

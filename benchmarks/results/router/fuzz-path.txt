@@ -1,0 +1,12 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/263 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 263/263 completed, now fuzzing with 16 workers
+fuzz: elapsed: 3s, execs: 227524 (75833/sec), new interesting: 12 (total: 275)
+fuzz: elapsed: 6s, execs: 490061 (87359/sec), new interesting: 23 (total: 286)
+fuzz: elapsed: 9s, execs: 745710 (85358/sec), new interesting: 32 (total: 295)
+fuzz: elapsed: 12s, execs: 1023694 (92670/sec), new interesting: 38 (total: 301)
+fuzz: elapsed: 15s, execs: 1296630 (90936/sec), new interesting: 46 (total: 309)
+fuzz: elapsed: 16s, execs: 1296630 (0/sec), new interesting: 46 (total: 309)
+PASS
+ok  	github.com/helantianshen/gateway/internal/router	15.741s
+Go version: go version go1.26.3 linux/amd64
+Command: go test -fuzz=FuzzParsePathPattern -fuzztime=15s ./internal/router/

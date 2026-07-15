@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: github.com/helantianshen/gateway/internal/router
+cpu: AMD Ryzen 7 7735H with Radeon Graphics        
+BenchmarkMatch/routes_10-16    	 1967506	       620.5 ns/op	     232 B/op	      13 allocs/op
+BenchmarkMatch/routes_10-16    	 2043968	       636.9 ns/op	     232 B/op	      13 allocs/op
+BenchmarkMatch/routes_10-16    	 1975045	       638.3 ns/op	     232 B/op	      13 allocs/op
+BenchmarkMatch/routes_1000-16  	   26256	     45332 ns/op	   16072 B/op	    1003 allocs/op
+BenchmarkMatch/routes_1000-16  	   27313	     44013 ns/op	   16072 B/op	    1003 allocs/op
+BenchmarkMatch/routes_1000-16  	   24931	     45196 ns/op	   16072 B/op	    1003 allocs/op
+BenchmarkMatch/routes_10000-16 	    2551	    639824 ns/op	  160072 B/op	   10003 allocs/op
+BenchmarkMatch/routes_10000-16 	    2499	    490283 ns/op	  160072 B/op	   10003 allocs/op
+BenchmarkMatch/routes_10000-16 	    2500	    472863 ns/op	  160072 B/op	   10003 allocs/op
+BenchmarkMatchCatchAll-16      	 3305019	       362.1 ns/op	     416 B/op	       5 allocs/op
+BenchmarkMatchCatchAll-16      	 3219708	       374.5 ns/op	     416 B/op	       5 allocs/op
+BenchmarkMatchCatchAll-16      	 2872652	       356.4 ns/op	     416 B/op	       5 allocs/op
+BenchmarkMatchHighFanOut-16    	  247548	      5038 ns/op	    2000 B/op	     104 allocs/op
+BenchmarkMatchHighFanOut-16    	  234168	      5662 ns/op	    2000 B/op	     104 allocs/op
+BenchmarkMatchHighFanOut-16    	  252699	      5043 ns/op	    2000 B/op	     104 allocs/op
+PASS
+ok  	github.com/helantianshen/gateway/internal/router	31.339s
+Go version: go version go1.26.3 linux/amd64
+Date: 2026-07-15T00:53:16Z
+Command: go test -bench=. -benchmem -count=3 -run=^$ ./internal/router/

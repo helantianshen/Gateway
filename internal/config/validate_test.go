@@ -43,6 +43,8 @@ func TestValidate_StructuralAndSemanticRules(t *testing.T) {
 		want   string
 	}{
 		{name: "api version", mutate: func(s *ConfigSpec) { s.APIVersion = "v2" }, want: "api_version: 必须为 \"v1\""},
+		{name: "no upstreams", mutate: func(s *ConfigSpec) { s.Upstreams = nil }, want: "upstreams: 至少需要配置一个 upstream"},
+		{name: "no routes", mutate: func(s *ConfigSpec) { s.Routes = nil }, want: "routes: 至少需要配置一条 route"},
 		{name: "empty upstream id", mutate: func(s *ConfigSpec) { s.Upstreams[0].ID = "" }, want: "upstreams[0].id: 不能为空"},
 		{name: "duplicate upstream id", mutate: func(s *ConfigSpec) { s.Upstreams = append(s.Upstreams, s.Upstreams[0]) }, want: "upstreams[1].id: 与 upstreams[0].id 重复"},
 		{name: "empty endpoint id", mutate: func(s *ConfigSpec) { s.Upstreams[0].Endpoints[0].ID = "" }, want: "upstreams[0].endpoints[0].id: 不能为空"},
@@ -99,6 +101,59 @@ func TestValidate_RejectsUserinfoWithoutLeakingURL(t *testing.T) {
 	}
 }
 
+func TestValidate_RouterSyntaxAndConflicts(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*ConfigSpec)
+		wantErr string
+	}{
+		{
+			name:    "路径缺少前导斜杠",
+			mutate:  func(s *ConfigSpec) { s.Routes[0].Path = "users/:id" },
+			wantErr: "必须以 / 开头",
+		},
+		{
+			name:    "Host 非 ASCII",
+			mutate:  func(s *ConfigSpec) { s.Routes[0].Host = "例子.example.com" },
+			wantErr: "ASCII",
+		},
+		{
+			name:    "Method 含非法字符",
+			mutate:  func(s *ConfigSpec) { s.Routes[0].Method = "BAD METHOD" },
+			wantErr: "非法 HTTP token",
+		},
+		{
+			name: "相同模式冲突",
+			mutate: func(s *ConfigSpec) {
+				s.Routes = append(s.Routes, RouteSpec{ID: "duplicate", Path: "/", Upstream: "mock-service"})
+			},
+			wantErr: "路由冲突",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := validSpec()
+			tt.mutate(spec)
+			err := Validate(spec, "router.yaml")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("Validate 错误 = %v, want 包含 %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidate_AcceptsMultiplePhase3Routes(t *testing.T) {
+	spec := validSpec()
+	spec.Routes = append(spec.Routes,
+		RouteSpec{ID: "users", Host: "api.example.com", Method: "GET", Path: "/users/:id", Upstream: "mock-service", Priority: 10, PreserveHost: true},
+		RouteSpec{ID: "files", Host: "*.example.com", Path: "/files/*path", Upstream: "mock-service"},
+	)
+	if err := Validate(spec, "routes.yaml"); err != nil {
+		t.Fatalf("合法 Phase 3 多路由配置返回错误: %v", err)
+	}
+}
+
 func TestValidate_AggregatesAllProblems(t *testing.T) {
 	spec := validSpec()
 	spec.APIVersion = "v9"
@@ -118,21 +173,12 @@ func TestValidate_AggregatesAllProblems(t *testing.T) {
 	}
 }
 
-func TestValidate_Phase2RuntimeConstraints(t *testing.T) {
+func TestValidate_Phase3RuntimeConstraints(t *testing.T) {
 	tests := []struct {
 		name   string
 		mutate func(*ConfigSpec)
 		want   string
 	}{
-		{name: "no routes", mutate: func(s *ConfigSpec) { s.Routes = nil }, want: "必须恰好配置一条 catch-all route"},
-		{name: "multiple routes", mutate: func(s *ConfigSpec) {
-			s.Routes = append(s.Routes, RouteSpec{ID: "other", Path: "/", Upstream: "mock-service"})
-		}, want: "必须恰好配置一条 catch-all route"},
-		{name: "non catch all path", mutate: func(s *ConfigSpec) { s.Routes[0].Path = "/api" }, want: "当前只支持 catch-all path \"/\""},
-		{name: "host matching", mutate: func(s *ConfigSpec) { s.Routes[0].Host = "example.com" }, want: "host 匹配将在 Phase 3 实现"},
-		{name: "method matching", mutate: func(s *ConfigSpec) { s.Routes[0].Method = "GET" }, want: "method 匹配将在 Phase 3 实现"},
-		{name: "non-zero priority", mutate: func(s *ConfigSpec) { s.Routes[0].Priority = 100 }, want: "priority 调度将在 Phase 3 实现"},
-		{name: "preserve_host true", mutate: func(s *ConfigSpec) { s.Routes[0].PreserveHost = true }, want: "preserve_host 将在 Phase 3 实现"},
 		{name: "no endpoint", mutate: func(s *ConfigSpec) { s.Upstreams[0].Endpoints = nil }, want: "必须恰好包含一个 endpoint"},
 		{name: "multiple endpoints", mutate: func(s *ConfigSpec) {
 			s.Upstreams[0].Endpoints = append(s.Upstreams[0].Endpoints, EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 100})
@@ -143,12 +189,12 @@ func TestValidate_Phase2RuntimeConstraints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := validSpec()
 			tt.mutate(spec)
-			err := Validate(spec, "phase2.yaml")
+			err := Validate(spec, "phase3.yaml")
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("Phase 2 约束错误 = %v, want 包含 %q", err, tt.want)
+				t.Fatalf("Phase 3 约束错误 = %v, want 包含 %q", err, tt.want)
 			}
-			if !strings.Contains(err.Error(), phase2Unsupported) {
-				t.Errorf("Phase 2 约束错误缺少统一迁移提示: %v", err)
+			if !strings.Contains(err.Error(), phase3SingleEndpoint) {
+				t.Errorf("Phase 3 约束错误缺少统一迁移提示: %v", err)
 			}
 		})
 	}
@@ -167,8 +213,8 @@ func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compile 返回意外错误: %v", err)
 	}
-	if cfg.UpstreamURL.Scheme != "http" || cfg.UpstreamURL.Host != "127.0.0.1:18080" {
-		t.Errorf("强类型 UpstreamURL 错误: %#v", cfg.UpstreamURL)
+	if cfg.UpstreamURLs["mock-service"].Scheme != "http" || cfg.UpstreamURLs["mock-service"].Host != "127.0.0.1:18080" {
+		t.Errorf("强类型 UpstreamURLs 错误: %#v", cfg.UpstreamURLs["mock-service"])
 	}
 	if cfg.RequestTimeout != 3*time.Second {
 		t.Errorf("RequestTimeout = %v, want 3s", cfg.RequestTimeout)
@@ -180,14 +226,14 @@ func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 
 func TestCompile_CannotBypassValidation(t *testing.T) {
 	spec := validSpec()
-	spec.Routes[0].Path = "/api"
+	spec.Upstreams[0].Endpoints = append(spec.Upstreams[0].Endpoints, EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 100})
 	_, err := Compile(spec, BootstrapConfig{
 		ConfigFile:      "compile.yaml",
 		PublicAddr:      ":8080",
 		AdminAddr:       ":9090",
 		ShutdownTimeout: time.Second,
 	})
-	if err == nil || !strings.Contains(err.Error(), phase2Unsupported) {
-		t.Fatalf("Compile 绕过了 Phase 2 校验: %v", err)
+	if err == nil || !strings.Contains(err.Error(), phase3SingleEndpoint) {
+		t.Fatalf("Compile 绕过了 Phase 3 校验: %v", err)
 	}
 }

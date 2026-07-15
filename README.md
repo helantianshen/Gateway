@@ -1,8 +1,8 @@
 # Gateway
 
-一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、连接池复用和统一错误处理。
+一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、连接池复用、统一错误处理和自研不可变压缩 Radix Tree 路由匹配。
 
-> 当前版本：**Phase 2** — 配置模型与严格 YAML
+> 当前版本：**Phase 3** — 路由语义与 Radix Tree
 
 ## 架构
 
@@ -10,26 +10,30 @@
 客户端
   │
   ▼
-┌─────────────────────────────────────────┐
-│  Gateway                                │
-│                                         │
-│  public Server (:8080)                  │
-│  ├─ httputil.ReverseProxy (Rewrite)     │
-│  ├─ hop-by-hop 头清理                   │
-│  ├─ X-Forwarded-* 重建                  │
-│  ├─ 请求总超时 (Context)                 │
-│  └─ 502 / 504 错误分类                  │
-│         │                               │
-│         ▼                               │
-│  共享 http.Transport                    │
-│  ├─ 连接池 (MaxConnsPerHost)            │
-│  ├─ TLS / HTTP2 协商                     │
-│  └─ CloseIdleConnections (停机时)       │
-│         │                               │
-│  admin Server (:9090)                   │
-│  ├─ GET/HEAD /livez                     │
-│  └─ GET/HEAD /readyz                    │
-└─────────────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│  Gateway                                       │
+│                                                │
+│  public Server (:8080)                         │
+│  ├─ GatewayHandler                             │
+│  │  ├─ ParsePath（%XX、编码斜杠、dot segment）  │
+│  │  ├─ Router.Match（Host → Method → Path）     │
+│  │  ├─ 400 Bad Request（非法路径）              │
+│  │  ├─ 404 Not Found（无匹配路由）              │
+│  │  └─ 委托给固定目标 Proxy                      │
+│  │     ├─ Rewrite（SetURL + 转发头 + preserveHost）│
+│  │     ├─ 请求总超时 (Context)                    │
+│  │     └─ 502 / 504 错误分类                     │
+│  │              │                               │
+│  │              ▼                               │
+│  共享 http.Transport                            │
+│  ├─ 连接池 (MaxConnsPerHost)                   │
+│  ├─ TLS / HTTP2 协商                            │
+│  └─ CloseIdleConnections (停机时)              │
+│                                                │
+│  admin Server (:9090)                          │
+│  ├─ GET/HEAD /livez                            │
+│  └─ GET/HEAD /readyz                          │
+└───────────────────────────────────────────────┘
   │
   ▼
 upstream 服务
@@ -42,22 +46,32 @@ upstream 服务
 make run-mock
 
 # 终端 2：使用默认 configs/gateway.yaml 启动 gateway
-# 默认监听 public :8080、admin :9090，并转发到 mock-service :18080
 make run-gateway
 ```
 
-验证：
+验证路由匹配（默认配置只依赖上述一个 mock-service）：
 
 ```bash
-# 业务请求经网关转发到 mock-service
+# 精确 GET 路由
 curl -i 'http://127.0.0.1:8080/hello?name=gateway'
-curl -i http://127.0.0.1:8080/echo -d 'hello body'
 
-# SSE 流式响应
-curl -N 'http://127.0.0.1:8080/stream?count=3'
+# 精确 POST 路由并透传 body
+curl -i -X POST 'http://127.0.0.1:8080/echo' -d 'hello body'
 
-# upstream 超时返回 504
-curl -i 'http://127.0.0.1:8080/slow?delay=5s'
+# exact Host 匹配 + preserve_host
+curl -i -H 'Host: admin.example.com:8443' 'http://127.0.0.1:8080/hello'
+
+# wildcard Host 匹配（单层 label）
+curl -i -H 'Host: app.example.com' 'http://127.0.0.1:8080/hello'
+
+# GET catch-all 路由
+curl -i 'http://127.0.0.1:8080/anything/here'
+
+# 非法编码斜杠返回 400
+curl -i 'http://127.0.0.1:8080/objects%2F123'
+
+# 未配置的非 GET 请求返回 404
+curl -i -X DELETE 'http://127.0.0.1:8080/anything/here'
 
 # 健康端点
 curl -i http://127.0.0.1:9090/livez
@@ -66,7 +80,7 @@ curl -i http://127.0.0.1:9090/readyz
 
 ## 配置
 
-Phase 2 将配置明确分为两类：YAML 是 upstream、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
+Phase 3 将配置明确分为两类：YAML 是 upstream、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
 
 ### YAML 业务配置
 
@@ -81,8 +95,32 @@ upstreams:
         weight: 100
 
 routes:
-  - id: default
-    path: /
+  - id: hello
+    method: GET
+    path: /hello
+    upstream: mock-service
+
+  - id: object-detail
+    method: GET
+    path: /objects/:id
+    upstream: mock-service
+
+  - id: admin-hello
+    host: admin.example.com
+    method: GET
+    path: /hello
+    upstream: mock-service
+    preserve_host: true
+
+  - id: tenant-hello
+    host: "*.example.com"
+    method: GET
+    path: /hello
+    upstream: mock-service
+
+  - id: fallback
+    method: GET
+    path: /*path
     upstream: mock-service
 
 policies:
@@ -98,10 +136,19 @@ policies:
 - route 引用的 upstream 必须存在；
 - endpoint URL 必须是带 host 的 `http` 或 `https` 绝对 URL，且不允许包含 userinfo；
 - `weight` 必须为正整数，省略时默认取 `100`；
-- `request_timeout` 必须是正数 Go duration，例如 `3s`、`500ms` 或 `1m`；
-- `rate` 和 `burst` 必须为非负整数；它们在 Phase 2 只解析和校验，尚不执行限流。
+- `request_timeout` 必须是正数 Go duration；
+- `rate` 和 `burst` 必须为非负整数；
+- 每个 upstream 恰好包含一个 endpoint（Phase 4 将解除多 endpoint 限制）。
 
-配置模型已经预留后续路由和负载均衡字段，但 Phase 2 运行时只接受一条 `path: /` 的兜底路由，以及该路由所引用 upstream 中的单个 endpoint。多路由、host/method 匹配、非兜底路径或多 endpoint 会返回明确的阶段约束错误，不会被静默忽略。
+路由配置还经过 `router.Compile` 的语法校验和冲突检测：
+
+- 路径模式支持 `static`、`:param`、`*catchAll` 三种段类型；
+- 参数名必须非空、只含 `[a-zA-Z][a-zA-Z0-9_]*`，同一路径模式中不可重复；
+- catch-all 只能出现在最后一段；
+- Host 支持 `exact`、`*.wildcard` 和空（任意）三种形式；
+- Method 支持标准 HTTP method、自定义 token 和空（任意 Method）；
+- HEAD 请求自动回退到 GET 路由（固定顺序：HEAD → GET → any）；
+- 两条路由在相同 Host+Method+Path specificity 且相同 priority 时视为冲突，启动时被拒绝。
 
 ### 环境变量启动参数
 
@@ -112,16 +159,7 @@ policies:
 | `GATEWAY_ADMIN_ADDR` | `:9090` | admin Server 监听地址 |
 | `GATEWAY_SHUTDOWN_TIMEOUT` | `10s` | Graceful Shutdown 超时，必须为正数 Go duration |
 
-例如，使用自定义配置文件和监听地址启动：
-
-```bash
-GATEWAY_CONFIG_FILE=/etc/gateway/gateway.yaml \
-GATEWAY_PUBLIC_ADDR=127.0.0.1:8080 \
-GATEWAY_ADMIN_ADDR=127.0.0.1:9090 \
-make run-gateway
-```
-
-Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。若部署环境仍声明任一旧变量，启动会返回迁移错误；请分别改用 YAML 的 `upstreams[].endpoints[].url` 和 `policies.request_timeout`。所有配置加载与校验都在 Application 创建监听器之前完成，因此非法配置不会占用 public 或 admin 端口。
+Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。若部署环境仍声明任一旧变量，启动会返回迁移错误。
 
 ## 项目结构
 
@@ -131,46 +169,81 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │   ├── gateway/            # 网关进程入口
 │   └── mock-service/       # 本地演示 upstream
 ├── configs/
-│   └── gateway.yaml        # Phase 2 默认 YAML 示例配置
+│   └── gateway.yaml        # Phase 3 默认 YAML 示例配置
 ├── internal/
-│   ├── bootstrap/          # 应用生命周期：双 Server、Run、Graceful Shutdown
+│   ├── bootstrap/          # 应用生命周期：双 Server、Router、GatewayHandler、Run、Graceful Shutdown
 │   ├── config/             # 严格 YAML、启动参数、校验与强类型编译
-│   └── dataplane/
-│       ├── proxy/          # httputil.ReverseProxy 封装
-│       ├── server/         # HTTP Server 与健康端点
-│       ├── transport/      # 共享 http.Transport
-│       └── response/       # 统一 JSON 错误响应
+│   ├── dataplane/
+│   │   ├── gateway/        # GatewayHandler：ParsePath → Router.Match → 委托 Proxy
+│   │   ├── proxy/          # httputil.ReverseProxy 封装（含 preserveHost）
+│   │   ├── server/         # HTTP Server 与健康端点
+│   │   ├── transport/      # 共享 http.Transport
+│   │   └── response/       # 统一 JSON 错误响应
+│   └── router/             # 不可变压缩 Radix Tree 路由匹配器
+│       ├── spec.go         # MatchResult、MatchError、Router 类型定义
+│       ├── tree.go         # buildNode → compressStaticEdges → freezeNode
+│       ├── compile.go      # 路由编译、冲突检测、Host/Method 分组
+│       ├── match.go        # 只读匹配：Host → Method → Path specificity
+│       ├── path.go         # 路径安全检查（EscapedPath → %XX → dot segment）
+│       ├── host.go         # Host 归一化（IPv6、端口、尾点、通配单层）
+│       ├── method.go       # Method 校验和 HEAD 回退
+│       ├── reference_test.go # 独立参考 matcher（外部测试包 router_test）
+│       ├── diff_test.go    # Radix vs reference 差分测试
+│       ├── fuzz_test.go    # Fuzz 测试
+│       └── bench_test.go   # Benchmark
+├── benchmarks/
+│   └── results/router/     # 原始 benchmark 结果
 ├── docs/
-│   ├── 01-technology-selection.md   # 技术选型
-│   ├── 02-architecture-design.md    # 架构设计
-│   ├── 03-development-roadmap.md    # 完整开发路线
-│   ├── 04-phase-0-1-implementation-plan.md  # Phase 0/1 实施计划
-│   └── 05-phase-2-implementation-plan.md    # Phase 2 实施计划
-├── .github/workflows/ci.yml          # GitHub Actions CI
-├── Makefile                          # fmt / vet / test / race / build
-├── go.mod                            # github.com/helantianshen/gateway
-├── LICENSE                           # MIT
+│   ├── 01-technology-selection.md
+│   ├── 02-architecture-design.md
+│   ├── 03-development-roadmap.md
+│   ├── 04-phase-0-1-implementation-plan.md
+│   ├── 05-phase-2-implementation-plan.md
+│   └── 06-phase-3-implementation-plan.md
+├── .github/workflows/ci.yml
+├── Makefile                # fmt / vet / test / race / build / bench / fuzz
+├── go.mod
+├── LICENSE                 # MIT
 └── CONTRIBUTING.md
 ```
 
 ## 核心设计
 
-### 双 HTTP Server
+### 不可变压缩 Radix Tree
 
-public Server 接收业务流量并转发到 upstream；admin Server 独立提供 `/livez` 和 `/readyz` 健康端点。两者使用不同的监听器，可以独立关闭或暴露到不同网络。
+路由匹配器在启动时将所有路由编译为一棵不可变的压缩 Radix Tree：
 
-### 共享 Transport
+- **builder → compress → freeze**：构建阶段使用可变 `buildNode`，静态边压缩合并连续 static-only 子链，冻结阶段深拷贝为只读 `node`，不保留 builder 或配置引用；
+- **Host → Method → Path** 分层 specificity：exact host > wildcard > any；显式 method > GET fallback > any；static > param > catch-all；更长前缀 > 更短前缀；priority 仅在前述语义层级完全相同时生效；
+- **编译期冲突检测**：两条路由在相同 Host+Method+Path specificity 且相同 priority 时视为冲突，启动时被拒绝；
+- **插入顺序无关**：子节点固定排序（static > param > catchAll，同类型按字典序），叶子按 priority 降序排列；
+- **参数名不影响结构**：`/:id` 与 `/:name` 共享同一个 param 分支，参数名在匹配成功后从叶子的 `compiledRoute.paramNames` 绑定；
+- **独立参考 matcher**：差分测试使用外部测试包 `router_test` 中的独立线性 matcher，不复用生产实现的解析、冲突或比较函数，收集全部候选后用独立 specificity 比较器选出唯一最优项。
 
-应用启动时创建一个 `http.Transport`，在整个生命周期内被所有代理请求复用。配置了连接池上限、Dial 超时、TLS 握手超时、响应头超时和空闲连接回收。停机时调用 `CloseIdleConnections` 释放出站连接池。
+### 路径安全检查
 
-### ReverseProxy Rewrite 模式
+请求路径经过固定顺序的安全检查：
 
-使用 Go 1.20+ 的 `Rewrite` + `ProxyRequest.SetURL`，不使用已废弃的 `Director`。标准库在调用 `Rewrite` 前自动移除 hop-by-hop 头和客户端伪造的 `X-Forwarded-*`，`Rewrite` 中重新设置干净的转发头。
+1. `URL.EscapedPath()`（非 `URL.Path`，后者已解码，无法区分编码斜杠）
+2. 验证所有 `%XX` 转义是否合法
+3. 拒绝解码后为 `/` 或 `\` 的转义（`%2F`、`%5C`）
+4. 按字面 `/` 分段
+5. 每段 `PathUnescape`
+6. 验证 UTF-8 有效性
+7. 拒绝解码后的 `.` 和 `..`
+
+非法路径返回 `400 Bad Request`，无匹配路由返回 `404 Not Found`。
+
+### preserveHost
+
+`preserve_host: true` 时，Proxy 的 `Rewrite` 在 `SetURL` 之后恢复客户端原始 Host 头，使 upstream 收到的 Host 与客户端请求一致。每个 `{upstreamID, preserveHost}` 组合在启动时预创建一个固定目标 Proxy，禁止每请求创建 Proxy。
 
 ### 错误分类
 
 | 场景 | 状态码 | 说明 |
 |---|---|---|
+| 非法路径（编码斜杠、dot segment） | 400 | `ParsePath` 检测到非法编码 |
+| 无匹配路由 | 404 | `Router.Match` 未找到路由 |
 | upstream 连接失败 | 502 | 网络或协议错误 |
 | upstream 超时 | 504 | 响应头超时或请求总超时 |
 | 响应头已写出后中断 | 原状态码 | 不二次改写，客户端收到部分响应 |
@@ -197,13 +270,19 @@ make race
 # 构建
 make build
 
+# Benchmark（结果保存到 benchmarks/results/router/）
+make bench
+
+# Fuzz 测试（各 15 秒）
+make fuzz
+
 # 一键全部检查
 make fmt-check vet test race build
 ```
 
 ## 技术约束
 
-数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。本阶段不引入配置中心、动态配置、第三方路由器或负载均衡框架。
+数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。Phase 3 的路由匹配器完全自研，不引入第三方路由框架。本阶段不实现多 endpoint 负载均衡、动态配置、限流执行或路径 rewrite。
 
 ## 开发路线
 
@@ -212,7 +291,7 @@ make fmt-check vet test race build
 | 0 | 工程骨架与质量基线 | ✅ 完成 |
 | 1 | 最小反向代理链路 | ✅ 完成 |
 | 2 | 配置模型与严格 YAML | ✅ 完成 |
-| 3 | 路由语义与 Radix Tree | — |
+| 3 | 路由语义与 Radix Tree | ✅ 完成 |
 | 4 | Upstream 与 Round Robin | — |
 | 5 | 中间件、日志与 Prometheus | — |
 | 6 | Gin 控制面与 etcd 发布 | — |

@@ -1,6 +1,6 @@
-# Gateway Phase 2 示例配置。
-# 当前运行时只支持一条 path 为 "/" 的兜底路由，以及该路由所引用 upstream 中的
-# 单个 endpoint；多路由和多 endpoint 会被明确拒绝，相关能力分别在后续阶段实现。
+# Gateway Phase 3 可直接运行的示例配置。
+# 只需执行 `make run-mock` 和 `make run-gateway`；所有路由都指向同一个 mock-service。
+# 多 upstream 分发由集成测试覆盖。每个 upstream 仍只允许一个 endpoint（Phase 4 解除）。
 api_version: v1
 
 upstreams:
@@ -8,18 +8,59 @@ upstreams:
     endpoints:
       - id: mock-1
         url: http://127.0.0.1:18080
-        # weight 省略时默认取 100；Phase 2 会校验该值，但尚不执行负载均衡。
+        # weight 省略时默认取 100；Phase 3 校验但不执行负载均衡。
         weight: 100
 
 routes:
-  - id: default
-    # Phase 2 必须使用兜底路径，host 与 method 等匹配字段应保持未设置。
-    path: /
+  - id: hello
+    method: GET
+    path: /hello
+    upstream: mock-service
+
+  - id: echo
+    method: POST
+    path: /echo
+    upstream: mock-service
+
+  - id: slow
+    method: GET
+    path: /slow
+    upstream: mock-service
+
+  - id: stream
+    method: GET
+    path: /stream
+    upstream: mock-service
+
+  # 参数路由用于展示 :param 语义；mock-service 未实现该业务端点时会原样返回 404。
+  - id: object-detail
+    method: GET
+    path: /objects/:id
+    upstream: mock-service
+
+  # exact Host 胜过下方 any Host 的 /hello，并保留包含端口的原始 Host。
+  - id: admin-hello
+    host: admin.example.com
+    method: GET
+    path: /hello
+    upstream: mock-service
+    preserve_host: true
+
+  # wildcard Host 只匹配单层 label，例如 app.example.com。
+  - id: tenant-hello
+    host: "*.example.com"
+    method: GET
+    path: /hello
+    upstream: mock-service
+
+  # 任意 Host 的 GET 兜底 catch-all；未知非 GET 请求仍返回 404。
+  - id: fallback
+    method: GET
+    path: /*path
     upstream: mock-service
 
 policies:
-  # request_timeout 已用于限制单次代理请求的总处理时长。
   request_timeout: 3s
-  # rate 与 burst 在 Phase 2 仅做严格解析和非负校验，尚不执行限流。
+  # rate 与 burst 在 Phase 3 仅解析和校验，尚不执行限流。
   rate: 0
   burst: 0

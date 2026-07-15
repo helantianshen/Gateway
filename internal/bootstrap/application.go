@@ -1,13 +1,13 @@
 // Package bootstrap 负责网关进程的依赖装配与生命周期管理。
 //
 // 职责：
-//   - 创建共享 Transport、反向代理 Proxy 和 admin Handler；
+//   - 创建共享 Transport、Router、GatewayHandler 和 admin Handler；
 //   - 创建 public 和 admin 两个 HTTP Server 及其底层 TCP 监听器；
 //   - 启动两个 Server 并在收到 Context 取消信号后执行带超时的 Graceful Shutdown；
 //   - Shutdown 时关闭 Transport 的 idle 连接，防止资源泄漏。
 //
 // 非职责（本轮明确不实现）：
-//   - 不实现路由匹配、负载均衡、限流等 Phase 2+ 功能；
+//   - 不实现负载均衡、限流等 Phase 4+ 功能；
 //   - 不实现配置热更新和动态配置；
 //   - 不实现可观测性（日志/指标/Trace）。
 package bootstrap
@@ -21,29 +21,21 @@ import (
 	"sync"
 
 	"github.com/helantianshen/gateway/internal/config"
-	"github.com/helantianshen/gateway/internal/dataplane/proxy"
+	"github.com/helantianshen/gateway/internal/dataplane/gateway"
 	"github.com/helantianshen/gateway/internal/dataplane/server"
 	"github.com/helantianshen/gateway/internal/dataplane/transport"
+	"github.com/helantianshen/gateway/internal/router"
 )
 
 // Application 是网关进程的核心运行时容器，持有 public 和 admin 两个 HTTP Server、
-// 底层监听器以及共享 Transport。
-//
-// 生命周期：
-//   - New 创建 Transport、Proxy、Handler、监听器和 Server，但不启动 Serve；
-//   - Run 启动两个 Server 的 Serve 循环并阻塞直到 Context 取消或 Server 异常退出；
-//   - Shutdown 在 Run 内部由 Context 取消触发，关闭 Server 后关闭 Transport idle 连接。
-//
-// 并发安全：
-//   - Run 应只调用一次，不支持并发启动多个 Run；
-//   - Shutdown 内部对 publicServer 和 adminServer 的关闭操作通过 WaitGroup 同步，
-//     确保 Run 返回前两个 Server 的 Shutdown 均已完成。
+// 底层监听器、共享 Transport 以及编译后的 Router。
 type Application struct {
 	publicServer   *http.Server
 	adminServer    *http.Server
 	publicListener net.Listener
 	adminListener  net.Listener
 	transport      *http.Transport
+	router         *router.Router
 	config         *config.Config
 }
 
@@ -56,12 +48,14 @@ type listenFunc func(network, address string) (net.Listener, error)
 //
 // 该函数在返回前完成以下工作：
 //  1. 创建应用级共享 Transport；
-//  2. 创建反向代理 Proxy（使用共享 Transport 和 upstream URL）；
-//  3. 创建 admin Handler（/livez、/readyz）；
-//  4. 创建 public 和 admin TCP 监听器；
-//  5. 创建配置了安全超时的 public 和 admin HTTP Server。
+//  2. 将 ConfigSpec.Routes 编译为不可变 Router（含冲突检测和静态边压缩）；
+//  3. 创建 GatewayHandler（使用 Router、upstream URL map、共享 Transport 和请求超时）；
+//  4. 创建 admin Handler（/livez、/readyz）；
+//  5. 创建 public 和 admin TCP 监听器；
+//  6. 创建配置了安全超时的 public 和 admin HTTP Server。
 //
 // 如果端口被占用会立即返回错误，而不是延迟到 Run 时才发现。
+// 如果路由编译失败（路径语法错误、冲突等），同样立即返回错误。
 // 如果 admin 监听器创建失败，会先关闭已创建的 public 监听器以避免资源泄漏。
 func New(cfg *config.Config) (*Application, error) {
 	return newWithListen(cfg, net.Listen)
@@ -82,16 +76,56 @@ func newWithListen(cfg *config.Config, listen listenFunc) (*Application, error) 
 	if cfg == nil {
 		return nil, errors.New("创建 Application 失败：配置不能为空")
 	}
+	if cfg.Spec == nil {
+		return nil, errors.New("创建 Application 失败：声明式配置不能为空")
+	}
+	if cfg.RequestTimeout <= 0 {
+		return nil, errors.New("创建 Application 失败：请求超时必须为正数")
+	}
+	if cfg.ShutdownTimeout <= 0 {
+		return nil, errors.New("创建 Application 失败：停机超时必须为正数")
+	}
 
-	// 创建应用级共享 Transport。
-	// 该 Transport 在整个应用生命周期内被所有代理请求复用，
+	// 将 ConfigSpec.Routes 转换为 router.CompileInput 并编译为不可变 Router。
+	// router.Compile 执行路径语法校验、Host/Method 归一化、冲突检测和静态边压缩。
+	// 如果路由配置存在语法错误或冲突，在此立即终止启动。
+	compileInputs := make([]router.CompileInput, 0, len(cfg.Spec.Routes))
+	for _, route := range cfg.Spec.Routes {
+		compileInputs = append(compileInputs, router.CompileInput{
+			RouteID:      route.ID,
+			Host:         route.Host,
+			Method:       route.Method,
+			Path:         route.Path,
+			Upstream:     route.Upstream,
+			Priority:     route.Priority,
+			PreserveHost: route.PreserveHost,
+		})
+	}
+	r, err := router.Compile(compileInputs)
+	if err != nil {
+		return nil, fmt.Errorf("创建 Application 失败: 路由编译失败: %w", err)
+	}
+	for upstreamID, target := range cfg.UpstreamURLs {
+		if target == nil {
+			return nil, fmt.Errorf("创建 Application 失败: upstream %q 的编译目标不能为空", upstreamID)
+		}
+	}
+	for _, route := range cfg.Spec.Routes {
+		if _, exists := cfg.UpstreamURLs[route.Upstream]; !exists {
+			return nil, fmt.Errorf("创建 Application 失败: 路由 %q 引用的 upstream %q 没有编译目标", route.ID, route.Upstream)
+		}
+	}
+
+	// 路由和 upstream 引用全部验证成功后才创建共享 Transport，避免无效配置产生资源。
+	// 该 Transport 在整个应用生命周期内被所有 GatewayHandler 内的 Proxy 复用，
 	// Shutdown 时通过 CloseIdleConnections 释放空闲连接。
 	tr := transport.New()
 
-	// 创建反向代理 Proxy。
-	// Proxy 使用共享 Transport，所有请求转发到 cfg.UpstreamURL。
+	// 创建 GatewayHandler。
+	// GatewayHandler 持有 Router 和按 {upstreamID, preserveHost} 预创建的 Proxy map。
+	// 所有 Proxy 共享同一个 Transport，禁止每请求创建 Proxy。
 	// 请求总超时由 cfg.RequestTimeout 控制。
-	proxyHandler := proxy.New(cfg.UpstreamURL, tr, cfg.RequestTimeout)
+	gatewayHandler := gateway.NewGatewayHandler(r, cfg.UpstreamURLs, tr, cfg.RequestTimeout)
 
 	// 创建 admin Handler，提供 /livez 和 /readyz 健康端点。
 	adminHandler := server.NewAdminHandler()
@@ -117,7 +151,8 @@ func newWithListen(cfg *config.Config, listen listenFunc) (*Application, error) 
 		publicListener: publicListener,
 		adminListener:  adminListener,
 		transport:      tr,
-		publicServer:   server.NewPublicServer(proxyHandler),
+		router:         r,
+		publicServer:   server.NewPublicServer(gatewayHandler),
 		adminServer:    server.NewAdminServer(adminHandler),
 		config:         cfg,
 	}, nil

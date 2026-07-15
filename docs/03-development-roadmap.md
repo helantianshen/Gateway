@@ -64,7 +64,7 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 | 0 | 工程骨架与质量基线 | 2–3 天 | MVP | gateway 进程可构建、测试、优雅退出 |
 | 1 | 最小反向代理链路 | 4–6 天 | MVP | 一个请求可稳定代理到 mock upstream，代理契约被测试固定 |
 | 2 | 配置模型与严格 YAML | 4–6 天 | MVP | YAML 可校验并驱动代理，不合法配置拒绝启动 |
-| 3 | 路由语义与 Radix Tree | 1–2 周 | MVP | host/method/path 规范、冲突检测、fuzz、benchmark |
+| 3 | 路由语义与 Radix Tree | 1–2 周 | MVP（已完成） | host/method/path 规范、冲突检测、fuzz、benchmark |
 | 4 | Upstream 与 Round Robin | 1 周 | MVP | 多实例 RR；注入健康状态后正确选择 |
 | 5 | 中间件、日志与指标 | 1 周 | MVP | 请求链有统一错误、结构化日志和 Prometheus 指标 |
 | 6 | Gin 控制面与 etcd 发布 | 1–2 周 | 核心版 | validate、CAS publish、config version、复制式 rollback |
@@ -194,7 +194,9 @@ curl http://localhost:8080/hello
 - 建立参考线性 matcher；
 - 与参考 matcher 做随机差分测试；
 - 对路径解析和冲突检测做 fuzz；
-- 对 10/1000/10000 条路由做 benchmark；
+- 对 10/1000/10000 条路由分别做 hit/miss benchmark，并记录编译和并行匹配；
+- 高 fan-out static 子边采用二分定位，压缩 prefix 比较不得在请求热路径 `strings.Split`；
+- GatewayHandler 把 `MatchResult` 写入 Context，供 Phase 5 日志/指标消费；
 - 可选与 `httprouter`、ServeMux 对照。
 
 ### 验收标准
@@ -206,8 +208,10 @@ curl http://localhost:8080/hello
 - [ ] reference matcher 不复用 Radix 的解析、冲突或比较函数；
 - [ ] `go test -race` 无问题；
 - [ ] fuzz 在约定时长内无 crash；
-- [ ] benchmark 记录 `ns/op`、`B/op`、`allocs/op`；
-- [ ] benchmark 原始结果保存到 `benchmarks/results/`。
+- [ ] benchmark 区分 hit/miss，记录 `ns/op`、`B/op`、`allocs/op`；
+- [ ] 10,000 路由 miss 不得退化为逐 static 子边线性扫描或每路由一次分配；
+- [ ] GatewayHandler 专项测试覆盖 400/404、HEAD fallback、多 upstream、preserveHost 和路由 Context；
+- [ ] benchmark 原始结果和提交前优化基线保存到 `benchmarks/results/router/`。
 
 ### 面试准备
 
@@ -217,6 +221,13 @@ curl http://localhost:8080/hello
 - 为什么不能依赖插入顺序；
 - 冲突检测与请求匹配为什么要分开；
 - 复杂度、内存占用和参数提取方式。
+
+### Phase 3 提交前复盘对后续阶段的约束
+
+- **Phase 4**：从“每个 upstream 预建两个 preserveHost Proxy”收敛为只构建路由实际引用的 `{upstreamID, preserveHost}` 组合；多 endpoint 状态不得写入不可变 Router。
+- **Phase 5**：直接消费 GatewayHandler 写入 Context 的 `RouteID`/`UpstreamID`，日志和指标不得重新匹配或使用原始 path 作为 label。
+- **Phase 6/7**：消除 `config.Validate` 与 `bootstrap.New` 的重复 Router 编译，统一产出不可变 `ConfigSnapshot`，通过原子指针整体替换，禁止就地修改现有树或 Proxy map。
+- **Phase 11**：补充真实 HTTP 并发压测、直连 upstream 对照和 100/1,000/10,000 routes 的 p50/p95/p99；微基准不能替代 E2E 代理压测。
 
 ---
 
@@ -581,8 +592,8 @@ observability:
 
 | 能力 | 计划命令 | 固定场景与初始阈值 | 结果文件 |
 |---|---|---|---|
-| 路由 fuzz | `make fuzz-router FUZZTIME=60s` | PR 每目标 60s 无 crash；nightly 10min | `benchmarks/results/router/fuzz-*.txt` |
-| 路由 benchmark | `make bench-router` | 10/1,000/10,000 routes；记录 ns/op、B/op、allocs/op；后续回归不劣化超过锁定阈值 | `benchmarks/results/router/bench-*.txt` |
+| 路由 fuzz | `make fuzz` | 路径、冲突对称性、编译匹配各 15s 无 crash；CI/nightly 后续提升至 60s/10min | `benchmarks/results/router/fuzz-*.txt` |
+| 路由 benchmark | `make bench` | 10/1,000/10,000 routes hit/miss + compile + parallel；记录 ns/op、B/op、allocs/op；后续回归不劣化超过锁定阈值 | `benchmarks/results/router/bench*.txt` |
 | RR/SWRR | `go test ./internal/dataplane/balancer -count=100` | RR 验证确定性序列；若有 SWRR，10,000 次选择的比例误差初始不超过 ±2% | `benchmarks/results/balancer/` |
 | 热更新 | `make e2e-config-churn` | 2 gateway、200 RPS、5min、20 次合法发布和 5 次非法发布；网关引入 5xx 为 0 | `tests/e2e/results/config/` |
 | 实例收敛 | `make e2e-convergence` | 两实例 ACK 同一 config version；本地 Compose 初始 p95 ≤2s | `tests/e2e/results/convergence/` |

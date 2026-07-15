@@ -51,7 +51,7 @@ func newTestProxy(t *testing.T, targetURL string, timeout time.Duration) (*Proxy
 		transport.CloseIdleConnections(tr)
 	})
 
-	p := New(u, tr, timeout)
+	p := New(u, tr, timeout, false)
 	return p, ts
 }
 
@@ -90,7 +90,7 @@ func TestProxy_ForwardMethodPathQuery(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 测试 GET with escaped path and query。
 	// 使用 RawPath 确保编码后的路径被原样转发。
@@ -152,7 +152,7 @@ func TestProxy_HopByHopHeadersRemoved(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Connection", "keep-alive")
@@ -214,7 +214,7 @@ func TestProxy_ForgedForwardedHeadersStripped(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/path", nil)
 	// 客户端伪造的转发头。
@@ -269,7 +269,7 @@ func TestProxy_DuplicateForwardedHeaders(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	// 添加多个 X-Forwarded-For 头。
@@ -311,7 +311,7 @@ func TestProxy_LargeBodyNotPreBuffered(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 使用 pipe 创建流式 body，模拟客户端逐步上传。
 	pr, pw := io.Pipe()
@@ -355,7 +355,7 @@ func TestProxy_CancelPropagation(t *testing.T) {
 		cancelled: outboundCancelled,
 	}
 	u, _ := url.Parse("http://upstream.invalid")
-	p := New(u, tr, 30*time.Second)
+	p := New(u, tr, 30*time.Second, false)
 
 	// 使用可控的 RoundTripper 阻塞在 outbound Context.Done()，
 	// 避免真实网络连接建立、响应和客户端断开时序带来的测试不确定性。
@@ -394,7 +394,7 @@ func TestProxy_CancelPropagation(t *testing.T) {
 // 连接失败场景：upstream 不可达（端口未监听）。
 func TestProxy_ConnectionFailure502(t *testing.T) {
 	u, _ := url.Parse("http://upstream.invalid")
-	p := New(u, errorRoundTripper{err: errors.New("connection refused")}, 5*time.Second)
+	p := New(u, errorRoundTripper{err: errors.New("connection refused")}, 5*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -448,7 +448,7 @@ func TestProxy_ResponseHeaderTimeout504(t *testing.T) {
 	tr := transport.New()
 	tr.ResponseHeaderTimeout = 50 * time.Millisecond
 	t.Cleanup(func() { transport.CloseIdleConnections(tr) })
-	p := New(u, tr, 2*time.Second)
+	p := New(u, tr, 2*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -496,7 +496,7 @@ func TestProxy_SSEFirstEventVisible(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	t.Cleanup(func() { transport.CloseIdleConnections(tr) })
-	p := New(u, tr, 2*time.Second)
+	p := New(u, tr, 2*time.Second, false)
 	proxyServer := httptest.NewServer(p)
 	t.Cleanup(proxyServer.Close)
 
@@ -563,7 +563,7 @@ func TestProxy_HeadersWrittenNoStatusChange(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 使用真实 HTTP client 而非 httptest.NewRecorder，
 	// 因为 httptest.NewRecorder 不会触发 panic(http.ErrAbortHandler) 的恢复逻辑。
@@ -613,7 +613,7 @@ func TestProxy_ProxyAndTransportReuse(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 发送多个请求。
 	for i := 0; i < 5; i++ {
@@ -651,7 +651,7 @@ func TestProxy_UpstreamHostMatchesTarget(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "client.example.com"
@@ -666,10 +666,36 @@ func TestProxy_UpstreamHostMatchesTarget(t *testing.T) {
 	}
 }
 
+// TestProxy_PreserveHost 验证 preserveHost=true 时，包含端口的客户端原始 Host
+// 会在 SetURL 之后恢复并原样发送给 upstream。
+func TestProxy_PreserveHost(t *testing.T) {
+	var receivedHost string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHost = r.Host
+		_, _ = io.WriteString(w, "ok")
+	}))
+	t.Cleanup(ts.Close)
+
+	target, _ := url.Parse(ts.URL)
+	tr := transport.New()
+	defer transport.CloseIdleConnections(tr)
+	p := New(target, tr, 10*time.Second, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "client.example.com:8443"
+	req.RemoteAddr = "203.0.113.50:54321"
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+
+	if receivedHost != req.Host {
+		t.Errorf("upstream Host = %q, want 原始 Host %q", receivedHost, req.Host)
+	}
+}
+
 // TestProxy_ErrorJSONFormat 验证错误响应的 JSON 格式正确。
 func TestProxy_ErrorJSONFormat(t *testing.T) {
 	u, _ := url.Parse("http://upstream.invalid")
-	p := New(u, errorRoundTripper{err: errors.New("dial failed")}, 5*time.Second)
+	p := New(u, errorRoundTripper{err: errors.New("dial failed")}, 5*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -714,7 +740,7 @@ func TestProxy_RequestTimeoutAfterHeadersAbortsBody(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	t.Cleanup(func() { transport.CloseIdleConnections(tr) })
-	p := New(u, tr, 100*time.Millisecond)
+	p := New(u, tr, 100*time.Millisecond, false)
 	proxyServer := httptest.NewServer(p)
 	t.Cleanup(proxyServer.Close)
 
@@ -774,7 +800,7 @@ func TestProxy_NoRetry(t *testing.T) {
 	p := New(u, errorRoundTripper{
 		err:   errors.New("upstream unavailable"),
 		calls: &calls,
-	}, 5*time.Second)
+	}, 5*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -815,7 +841,7 @@ func TestProxy_BodyForwarding(t *testing.T) {
 			u, _ := url.Parse(ts.URL)
 			tr := transport.New()
 			defer transport.CloseIdleConnections(tr)
-			p := New(u, tr, 10*time.Second)
+			p := New(u, tr, 10*time.Second, false)
 
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
 			req.RemoteAddr = "203.0.113.50:54321"
@@ -842,7 +868,7 @@ func TestProxy_QueryPreservation(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 包含特殊字符的 query。
 	query := "name=gateway&filter=a%2Bb&sort=desc&empty=&list=1&list=2"
@@ -869,7 +895,7 @@ func TestProxy_ResponseHeadersForwarded(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -902,7 +928,7 @@ func TestProxy_HopByHopResponseHeadersRemoved(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -931,7 +957,7 @@ func TestProxy_ClientDisconnectContext(t *testing.T) {
 		cancelled: outboundCancelled,
 	}
 	u, _ := url.Parse("http://upstream.invalid")
-	p := New(u, tr, 30*time.Second)
+	p := New(u, tr, 30*time.Second, false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
@@ -983,7 +1009,7 @@ func TestProxy_SSEStreamingWithFlusher(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 30*time.Second)
+	p := New(u, tr, 30*time.Second, false)
 
 	proxyServer := httptest.NewServer(p)
 	t.Cleanup(proxyServer.Close)
@@ -1021,7 +1047,7 @@ func TestProxy_EmptyPathAndRootPath(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 测试根路径。
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -1063,7 +1089,7 @@ func TestProxy_BodyPartialForward(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	// 使用逐步产生数据的 reader。
 	reader := &slowReader{
@@ -1128,7 +1154,7 @@ func TestProxy_UpstreamReturns500(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -1154,7 +1180,7 @@ func TestProxy_UpstreamReturns404(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	req.RemoteAddr = "203.0.113.50:54321"
@@ -1183,7 +1209,7 @@ func TestProxy_WebSocketUpgradeNotSupported(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("Upgrade", "websocket")
@@ -1214,7 +1240,7 @@ func TestProxy_ConcurrentRequests(t *testing.T) {
 	u, _ := url.Parse(ts.URL)
 	tr := transport.New()
 	defer transport.CloseIdleConnections(tr)
-	p := New(u, tr, 10*time.Second)
+	p := New(u, tr, 10*time.Second, false)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {

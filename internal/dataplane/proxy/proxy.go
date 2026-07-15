@@ -9,7 +9,7 @@
 //
 // 非职责：
 //   - 不实现重试、熔断或负载均衡；
-//   - 不实现路由匹配（所有请求转发到同一 upstream）；
+//   - 不实现路由匹配（每个 Proxy 只负责一个由 GatewayHandler 选定的固定目标）；
 //   - 不实现请求/响应内容改写。
 //
 // 设计意图：
@@ -46,6 +46,10 @@ type Proxy struct {
 	// 超时触发后 Context 被取消，RoundTrip 返回 DeadlineExceeded 错误，
 	// ErrorHandler 据此返回 504。
 	timeout time.Duration
+
+	// preserveHost 为 true 时，Rewrite 在 SetURL 之后恢复客户端原始 Host 头，
+	// 使 upstream 收到的 Host 与客户端请求一致而非目标 URL 的 Host。
+	preserveHost bool
 }
 
 // New 创建一个 Proxy 实例。
@@ -53,15 +57,21 @@ type Proxy struct {
 // 参数：
 //   - target: upstream 目标地址，所有请求将转发到此地址；
 //   - rt: 共享的 http.RoundTripper（通常是 *http.Transport），在所有请求间复用；
-//   - timeout: 单次请求的总超时时长，必须为正值。
+//   - timeout: 单次请求的总超时时长，必须为正值；
+//   - preserveHost: true 时保留客户端原始 Host 头，不改写为目标地址 Host。
 //
 // target 会被浅拷贝，不会修改调用方传入的 url.URL。
 // rt 必须非 nil，否则代理无法发送请求。
-func New(target *url.URL, rt http.RoundTripper, timeout time.Duration) *Proxy {
+func New(target *url.URL, rt http.RoundTripper, timeout time.Duration, preserveHost bool) *Proxy {
 	// 浅拷贝 target，避免修改调用方的 url.URL。
 	// SetURL 会修改 ProxyRequest.Out.URL 的 Scheme/Host/Path，
 	// 但不会修改 target 本身，这里拷贝是为了清晰和安全。
 	t := *target
+
+	p := &Proxy{
+		timeout:      timeout,
+		preserveHost: preserveHost,
+	}
 
 	rp := &httputil.ReverseProxy{
 		// Transport 是所有 upstream 请求使用的 RoundTripper。
@@ -79,6 +89,13 @@ func New(target *url.URL, rt http.RoundTripper, timeout time.Duration) *Proxy {
 			// 它会将 r.Out.Host 设为空字符串，使 outbound 请求的 Host
 			// 头自动使用目标地址的 host（即 "默认让 upstream Host 与目标地址一致"）。
 			r.SetURL(&t)
+
+			// preserveHost 为 true 时，恢复客户端原始 Host 头。
+			// 必须在 SetURL 之后执行，因为 SetURL 会清空 r.Out.Host。
+			// upstream 收到的仍是原始请求方法（如 HEAD），不改写。
+			if p.preserveHost {
+				r.Out.Host = r.In.Host
+			}
 
 			// SetXForwarded 设置正确的转发头：
 			//   - X-Forwarded-For: 客户端真实 IP；
@@ -103,10 +120,8 @@ func New(target *url.URL, rt http.RoundTripper, timeout time.Duration) *Proxy {
 		ErrorHandler: errorHandler,
 	}
 
-	return &Proxy{
-		rp:      rp,
-		timeout: timeout,
-	}
+	p.rp = rp
+	return p
 }
 
 // ServeHTTP 实现 http.Handler 接口，处理每个进入网关的请求。

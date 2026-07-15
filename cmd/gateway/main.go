@@ -1,6 +1,6 @@
 // Package main 是 gateway 进程的唯一正式入口。
 //
-// 职责（Phase 2）：
+// 职责（Phase 3）：
 //   - 先读取环境变量中的本地启动参数，再严格加载、校验并编译 YAML 业务配置；
 //   - 只有完整配置管线成功后才创建 Application，确保非法配置不会绑定监听端口；
 //   - 使用 signal.NotifyContext 监听 SIGINT/SIGTERM；

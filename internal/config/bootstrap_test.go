@@ -163,8 +163,8 @@ func TestLoad_CompilesYAMLAndEnvironment(t *testing.T) {
 	if cfg.PublicAddr != "127.0.0.1:10080" || cfg.AdminAddr != "127.0.0.1:10090" {
 		t.Errorf("监听地址编译错误: public=%q admin=%q", cfg.PublicAddr, cfg.AdminAddr)
 	}
-	if cfg.UpstreamURL.String() != "http://127.0.0.1:18080" {
-		t.Errorf("UpstreamURL = %q", cfg.UpstreamURL)
+	if cfg.UpstreamURLs["mock-service"].String() != "http://127.0.0.1:18080" {
+		t.Errorf("UpstreamURLs = %q", cfg.UpstreamURLs["mock-service"])
 	}
 	if cfg.RequestTimeout != 3*time.Second || cfg.ShutdownTimeout != 15*time.Second {
 		t.Errorf("超时编译错误: request=%v shutdown=%v", cfg.RequestTimeout, cfg.ShutdownTimeout)

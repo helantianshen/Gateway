@@ -2,9 +2,9 @@ package config
 
 // ConfigSpec 是 gateway YAML 文件的顶层声明式配置。
 //
-// 该模型刻意同时保留 upstream、endpoint 与 route 三个层次：Phase 2 运行时虽然只会
-// 编译单条兜底路由和单个 endpoint，但 schema 已能稳定承载 Phase 3 的路由匹配与
-// Phase 4 的多 endpoint 负载均衡，后续阶段无需对现有 YAML 做破坏性迁移。
+// 该模型同时保留 upstream、endpoint 与 route 三个层次：Phase 3 已支持多路由和
+// 多 upstream，但每个 upstream 仍只允许一个 endpoint；Phase 4 将在保持 YAML
+// 结构兼容的前提下解除多 endpoint 限制。
 type ConfigSpec struct {
 	APIVersion string         `yaml:"api_version"`
 	Upstreams  []UpstreamSpec `yaml:"upstreams"`
@@ -14,8 +14,8 @@ type ConfigSpec struct {
 
 // UpstreamSpec 定义一个逻辑上游及其服务端点集合。
 //
-// Phase 2 只允许被 route 引用的 upstream 含有一个 endpoint；Endpoints 保持切片形态，
-// 是为了让 Phase 4 可以直接在同一配置模型上实现负载均衡，而不是重新设计配置格式。
+// Phase 3 要求每个 upstream 恰好一个 endpoint；Endpoints 保持切片形态，是为了让
+// Phase 4 可以直接在同一配置模型上实现负载均衡，而不是重新设计配置格式。
 type UpstreamSpec struct {
 	ID        string         `yaml:"id"`
 	Endpoints []EndpointSpec `yaml:"endpoints"`
@@ -31,8 +31,8 @@ type EndpointSpec struct {
 
 // RouteSpec 定义一条声明式路由规则。
 //
-// Host、Method、Priority 和 PreserveHost 是为 Phase 3 预留的稳定字段。Phase 2 只接受
-// Host 与 Method 为空、Path 为 "/" 的单条 catch-all route，不在本阶段实现路由匹配。
+// Host、Method、Path、Priority 和 PreserveHost 均已在 Phase 3 参与 Router 编译与
+// 数据面匹配；Upstream 保存逻辑 upstream ID，不直接耦合 endpoint URL。
 type RouteSpec struct {
 	ID           string `yaml:"id"`
 	Host         string `yaml:"host"`
@@ -44,8 +44,8 @@ type RouteSpec struct {
 }
 
 // PolicySpec 定义当前配置版本中的全局策略。
-// RequestTimeout 在 Phase 2 已参与代理请求总超时；Rate 与 Burst 仅完成严格解析和范围
-// 校验，限流策略的实际执行属于后续阶段，本阶段不会静默启用尚未实现的限流行为。
+// RequestTimeout 参与代理请求总超时；Rate 与 Burst 在 Phase 3 仍只完成严格解析和
+// 范围校验，限流策略的实际执行属于后续阶段，不会静默启用尚未实现的行为。
 type PolicySpec struct {
 	RequestTimeout string `yaml:"request_timeout"`
 	Rate           int    `yaml:"rate"`
