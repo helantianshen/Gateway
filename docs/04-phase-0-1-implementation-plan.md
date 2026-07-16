@@ -1,9 +1,13 @@
 # Phase 0–1 实施计划
 
-> 状态：已完成，独立复审与主智能体最终验收通过  
-> 目标版本：v0.1.0（工程骨架与最小反向代理）  
-> Go Module：`github.com/helantianshen/gateway`  
-> Go Toolchain：`go1.26.3 linux/amd64`  
+> 状态：已完成，独立复审与主智能体最终验收通过
+>
+> 目标版本：v0.1.0（工程骨架与最小反向代理）
+>
+> Go Module：`github.com/helantianshen/gateway`
+>
+> Go Toolchain：`go1.26.3 linux/amd64`
+>
 > License：MIT
 
 ## 1. 执行方式

@@ -1,7 +1,7 @@
 goos: linux
 goarch: amd64
 pkg: github.com/helantianshen/gateway/internal/router
-cpu: AMD Ryzen 7 7735H with Radeon Graphics        
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
 BenchmarkMatch/routes_10-16    	 1967506	       620.5 ns/op	     232 B/op	      13 allocs/op
 BenchmarkMatch/routes_10-16    	 2043968	       636.9 ns/op	     232 B/op	      13 allocs/op
 BenchmarkMatch/routes_10-16    	 1975045	       638.3 ns/op	     232 B/op	      13 allocs/op

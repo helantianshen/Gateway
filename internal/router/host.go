@@ -15,17 +15,24 @@ import (
 //  2. 去除 hostname 的单个 trailing dot；
 //  3. 仅执行 ASCII lowercase。
 //
-// 请求侧采用保守的容错策略：authority 非法时保留原值（只做单尾点和 ASCII
-// lowercase），使其无法意外命中合法 exact/wildcard 配置；任意 Host 路由仍可接收它。
+// 请求侧采用保守的容错策略：authority、IP 或 DNS label 非法时返回空字符串，
+// 使其无法命中合法 exact/wildcard 配置；任意 Host 路由仍可接收它。
 func NormalizeHost(rawHost string) string {
 	if rawHost == "" {
 		return ""
 	}
 	hostname, err := splitAuthorityHost(rawHost)
 	if err != nil {
-		hostname = rawHost
+		return ""
 	}
-	return normalizeHostname(hostname)
+	normalized := normalizeHostname(hostname)
+	if _, err := netip.ParseAddr(normalized); err == nil {
+		return normalized
+	}
+	if validateDNSName(normalized) != nil {
+		return ""
+	}
+	return normalized
 }
 
 // ParseHostPattern 解析配置中的 host 字段。
@@ -154,7 +161,12 @@ func validateDNSName(hostname string) error {
 	if len(hostname) > 253 {
 		return fmt.Errorf("DNS host 长度不能超过 253 字节")
 	}
-	for _, label := range strings.Split(hostname, ".") {
+	labelStart := 0
+	for index := 0; index <= len(hostname); index++ {
+		if index < len(hostname) && hostname[index] != '.' {
+			continue
+		}
+		label := hostname[labelStart:index]
 		if label == "" {
 			return fmt.Errorf("DNS host 不能包含空 label")
 		}
@@ -171,6 +183,7 @@ func validateDNSName(hostname string) error {
 		if label[0] == '-' || label[len(label)-1] == '-' {
 			return fmt.Errorf("DNS label 不能以连字符开头或结尾")
 		}
+		labelStart = index + 1
 	}
 	return nil
 }

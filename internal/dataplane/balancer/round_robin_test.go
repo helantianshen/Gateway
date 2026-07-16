@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -36,6 +37,41 @@ func TestRoundRobinSkipsUnavailableAndRecovers(t *testing.T) {
 		if !ok || got != expected {
 			t.Fatalf("节点恢复后：第 %d 次 = (%d, %v), want (%d, true)", i, got, ok, expected)
 		}
+	}
+}
+
+func TestRoundRobinPreservesSequenceAcrossUint64Wrap(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		count     int
+		available func(int) bool
+		want      []int
+	}{
+		{
+			name:      "全部可用",
+			count:     3,
+			available: func(int) bool { return true },
+			want:      []int{0, 1, 2, 0},
+		},
+		{
+			name:  "回绕时跳过不可用",
+			count: 3,
+			available: func(index int) bool {
+				return index != 0
+			},
+			want: []int{1, 2, 1, 2},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var rr RoundRobin
+			rr.cursor.Store(math.MaxUint64)
+			for selection, want := range test.want {
+				got, ok := rr.Select(test.count, test.available)
+				if !ok || got != want {
+					t.Fatalf("第 %d 次选择 = (%d, %v), want (%d, true)", selection, got, ok, want)
+				}
+			}
+		})
 	}
 }
 

@@ -42,8 +42,8 @@ type RouteSpec struct {
 }
 
 // PolicySpec 定义当前配置版本中的全局策略。
-// RequestTimeout 参与代理请求总超时；Rate 与 Burst 在 Phase 4 仍只完成严格解析和
-// 范围校验，限流策略的实际执行属于后续阶段，不会静默启用尚未实现的行为。
+// RequestTimeout 参与代理请求总超时；Rate 与 Burst 当前只完成严格解析和范围校验。
+// Phase 5 已建立 route policy chain，实际限流执行仍属于 Phase 9A。
 type PolicySpec struct {
 	RequestTimeout string `yaml:"request_timeout"`
 	Rate           int    `yaml:"rate"`

@@ -1,0 +1,40 @@
+Phase 5 real-process observability verification
+Date: 2026-07-15
+Go version: go version go1.26.3 linux/amd64
+Environment: Linux, AMD Ryzen 7 7735H with Radeon Graphics
+
+Processes:
+- mock-service -id mock-1 -addr :18080
+- mock-service -id mock-2 -addr :18081
+- mock-service -id mock-3 -addr :18082
+- production gateway with configs/gateway.yaml (:8080 / :9090)
+
+Verified results:
+- Six GET /hello endpoint responses: mock-1,mock-2,mock-3,mock-1,mock-2,mock-3
+- Supplied X-Request-ID was echoed to the response and propagated through the request chain.
+- Encoded slash returned 400 BAD_REQUEST with the same request ID in Header and JSON body.
+- Authorization, Cookie, request body, query value, and unmatched raw path sentinel values were absent from access logs.
+- The unmatched catch-all request logged path_template=/*path and outcome=upstream_response_error.
+- Each known request ID produced exactly one "request completed" access log; 12 access logs were parsed in total.
+- SSE returned two flushed events through the middleware ResponseWriter wrapper.
+- Admin /metrics exposed request, duration, inflight, upstream, endpoint health/active, and config version metrics.
+- Metrics contained no request ID, raw path, query value, or secret sentinel.
+- SIGTERM graceful shutdown exited with status 0 and flushed the production logger.
+
+Notes:
+- curl used --noproxy '*' because the local environment defines HTTP_PROXY/HTTPS_PROXY.
+- Active health checking remains out of scope; endpoint health metrics read the current injected atomic state.
+
+Phase 0-5 retrospective revalidation
+Date: 2026-07-16 (CST)
+Go version: go version go1.26.5 linux/amd64
+
+Verified results:
+- Three mocks were health-checked before starting the Gateway.
+- Six GET /hello responses remained mock-1,mock-2,mock-3,mock-1,mock-2,mock-3.
+- A supplied request ID produced exactly one completion log.
+- Host foo_bar.example.com did not match *.example.com and selected the any-host hello route.
+- Authorization, Cookie, and query sentinels were absent from production JSON logs.
+- SSE returned two events; private metrics contained request series and no raw query path.
+- 12 completion logs were parsed across public and admin requests.
+- SIGTERM exited with status 0 after the revised shutdown lifecycle.

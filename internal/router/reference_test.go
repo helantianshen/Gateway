@@ -21,6 +21,7 @@ type referenceMatcher struct {
 
 type referenceRoute struct {
 	routeID      string
+	pathTemplate string
 	upstreamID   string
 	preserveHost bool
 	priority     int
@@ -32,6 +33,7 @@ type referenceRoute struct {
 
 type referenceResult struct {
 	RouteID      string
+	PathTemplate string
 	UpstreamID   string
 	Params       map[string]string
 	PreserveHost bool
@@ -75,6 +77,7 @@ func newReferenceMatcher(inputs []router.CompileInput) (*referenceMatcher, error
 		}
 		routes = append(routes, referenceRoute{
 			routeID:      input.RouteID,
+			pathTemplate: input.Path,
 			upstreamID:   input.Upstream,
 			preserveHost: input.PreserveHost,
 			priority:     input.Priority,
@@ -127,6 +130,7 @@ func (m *referenceMatcher) Match(host, method string, path []string) (*reference
 	winner := candidates[0]
 	return &referenceResult{
 		RouteID:      winner.route.routeID,
+		PathTemplate: winner.route.pathTemplate,
 		UpstreamID:   winner.route.upstreamID,
 		Params:       winner.params,
 		PreserveHost: winner.route.preserveHost,
@@ -153,7 +157,7 @@ func refParseHost(raw string) (refHostKind, string, error) {
 	host = refASCIILower(strings.TrimSuffix(host, "."))
 	if strings.HasPrefix(host, "*.") {
 		suffix := host[2:]
-		if suffix == "" || strings.Contains(suffix, "*") {
+		if suffix == "" || strings.Contains(suffix, "*") || !refValidDNSName(suffix) {
 			return 0, "", fmt.Errorf("非法 wildcard")
 		}
 		return refHostWildcard, suffix, nil
@@ -161,15 +165,50 @@ func refParseHost(raw string) (refHostKind, string, error) {
 	if strings.Contains(host, "*") {
 		return 0, "", fmt.Errorf("非法 wildcard 位置")
 	}
+	if _, err := netip.ParseAddr(host); err != nil && !refValidDNSName(host) {
+		return 0, "", fmt.Errorf("非法 host")
+	}
 	return refHostExact, host, nil
 }
 
 func refNormalizeRequestHost(raw string) string {
 	host, err := refSplitAuthority(raw)
 	if err != nil {
-		host = raw
+		return ""
 	}
-	return refASCIILower(strings.TrimSuffix(host, "."))
+	host = refASCIILower(strings.TrimSuffix(host, "."))
+	if _, err := netip.ParseAddr(host); err == nil {
+		return host
+	}
+	if !refValidDNSName(host) {
+		return ""
+	}
+	return host
+}
+
+func refValidDNSName(host string) bool {
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	labelLength := 0
+	for index := 0; index <= len(host); index++ {
+		if index < len(host) && host[index] != '.' {
+			c := host[index]
+			if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+				return false
+			}
+			labelLength++
+			if labelLength > 63 {
+				return false
+			}
+			continue
+		}
+		if labelLength == 0 || host[index-labelLength] == '-' || host[index-1] == '-' {
+			return false
+		}
+		labelLength = 0
+	}
+	return true
 }
 
 func refSplitAuthority(authority string) (string, error) {

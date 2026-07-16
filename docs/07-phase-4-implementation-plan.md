@@ -126,7 +126,7 @@ func (r *RoundRobin) Select(count int, available func(index int) bool) (int, boo
 5. CAS 失败说明并发请求抢先推进，重新选择；
 6. 扫描一轮仍无 available 时返回 false，不推进 cursor。
 
-使用单调 `uint64` 而不是反复写回 `[0,n)`，避免并发 ABA。健康状态在选择后变化是允许的：一次请求使用已选 endpoint 完成单次尝试，不在本阶段重试。
+正常路径使用单调 `uint64` 而不是反复写回 `[0,n)`，避免并发 ABA；到达 `uint64` 回绕边界时按当前候选数重基准，保持非 2 次幂 count 的数学序列。健康状态在选择后变化是允许的：一次请求使用已选 endpoint 完成单次尝试，不在本阶段重试。
 
 ### 4.3 Upstream 运行时层
 
@@ -387,7 +387,7 @@ make bench-balancer
 
 - 全量普通测试、race、vet、build、Makefile 门禁和核心包连续 100 次测试全部通过；
 - 语句覆盖率：Balancer `100%`、Upstream `86.0%`、Gateway `93.8%`、Bootstrap `94.9%`、Config `88.0%`；
-- 纯 RR 健康选择约 `4.4–5.7 ns/op`，完整 Upstream 选择约 `7.2–8.1 ns/op`；
-- 100 endpoint 稀疏健康场景的完整选择约 `259–263 ns/op`；全部选择 benchmark 均为 `0 B/op, 0 allocs/op`；
+- Phase 4 原始基线：纯 RR 健康选择约 `4.4–5.7 ns/op`，完整 Upstream 选择约 `7.2–8.1 ns/op`；
+- Phase 0–5 回溯审查在 Go 1.26.5 下复跑：纯 RR `5.0–5.7 ns/op`、完整选择 `7.5–8.2 ns/op`、100 endpoint 稀疏健康完整选择 `241–262 ns/op`；全部选择 benchmark 均为 `0 B/op, 0 allocs/op`；
 - 三个真实 mock-service 的六次选择序列为 `mock-1,mock-2,mock-3,mock-1,mock-2,mock-3`；
 - benchmark 与真实进程证据分别保存于 `benchmarks/results/balancer/bench.txt` 和 `integration.txt`。

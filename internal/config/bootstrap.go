@@ -140,10 +140,10 @@ func readStringEnv(key string, target *string, problems *[]string) {
 
 // Compile 把完整 ConfigSpec 与本地 BootstrapConfig 编译成 Application 使用的 Config。
 // Validate 由 Compile 自身调用，确保直接使用该公开入口的调用方也无法绕过结构、语义
-// 或 Phase 4 运行约束。Validate 成功后再做 URL 和 duration 的强类型转换；转换失败
+// 或当前运行约束。Validate 成功后再做 URL 和 duration 的强类型转换；转换失败
 // 理论上不可达，仍保留防御性错误以防未来校验规则与编译逻辑发生偏移。
 //
-// Phase 4：从所有 upstream 提取全部 endpoint，生成强类型 Upstreams map。
+// 从所有 upstream 提取全部 endpoint，生成强类型 Upstreams map。
 // 路由语法和冲突检测由 Validate 与 Application 共同调用 router.Compile 完成。
 func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 	file := bootstrap.ConfigFile

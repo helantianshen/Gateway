@@ -185,6 +185,7 @@ func buildMatchResult(route *compiledRoute, paramValues []string) *MatchResult {
 	}
 	return &MatchResult{
 		RouteID:      route.routeID,
+		PathTemplate: route.pathTemplate,
 		UpstreamID:   route.upstreamID,
 		Params:       params,
 		PreserveHost: route.preserveHost,

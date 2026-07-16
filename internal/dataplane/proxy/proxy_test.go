@@ -20,41 +20,6 @@ import (
 	"github.com/helantianshen/gateway/internal/dataplane/transport"
 )
 
-// newTestProxy 创建一个指向指定 httptest.Server 的 Proxy 实例，
-// 使用共享 Transport 和指定的超时。
-//
-// 这是一个辅助函数，减少测试中的重复代码。
-// transport.New() 创建的 Transport 配置了安全默认超时，
-// 但对于测试，ResponseHeaderTimeout 为 30s，大部分测试不会受影响。
-func newTestProxy(t *testing.T, targetURL string, timeout time.Duration) (*Proxy, *httptest.Server) {
-	t.Helper()
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 默认 handler 只做简单响应，具体测试可覆盖此行为。
-		fmt.Fprintf(w, "ok")
-	}))
-	t.Cleanup(ts.Close)
-
-	// 如果传入了自定义 URL，使用它；否则使用 ts.URL。
-	tgt := ts.URL
-	if targetURL != "" {
-		tgt = targetURL
-	}
-
-	u, err := url.Parse(tgt)
-	if err != nil {
-		t.Fatalf("解析 URL 失败: %v", err)
-	}
-
-	tr := transport.New()
-	t.Cleanup(func() {
-		transport.CloseIdleConnections(tr)
-	})
-
-	p := New(u, tr, timeout, false)
-	return p, ts
-}
-
 // TestProxy_ForwardMethodPathQuery 验证 GET/POST 方法、escaped path、query 和 body
 // 被正确转发到 upstream。
 //
@@ -882,7 +847,8 @@ func TestProxy_QueryPreservation(t *testing.T) {
 	}
 }
 
-// TestProxy_ResponseHeadersForwarded 验证 upstream 响应头被正确转发到客户端。
+// TestProxy_ResponseHeadersForwarded 验证普通 upstream 响应头被转发，同时剥离
+// upstream 伪造的 X-Request-ID；可信关联 ID 由 Phase 5 外层中间件唯一设置。
 func TestProxy_ResponseHeadersForwarded(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Custom-Response", "value123")
@@ -908,8 +874,8 @@ func TestProxy_ResponseHeadersForwarded(t *testing.T) {
 	if v := rec.Header().Get("X-Custom-Response"); v != "value123" {
 		t.Errorf("X-Custom-Response = %q, want %q", v, "value123")
 	}
-	if v := rec.Header().Get("X-Request-Id"); v != "abc-def" {
-		t.Errorf("X-Request-Id = %q, want %q", v, "abc-def")
+	if values := rec.Header().Values("X-Request-ID"); len(values) != 0 {
+		t.Errorf("upstream X-Request-ID 未被剥离: %v", values)
 	}
 }
 
@@ -1192,13 +1158,10 @@ func TestProxy_UpstreamReturns404(t *testing.T) {
 	}
 }
 
-// TestProxy_WebSocketUpgradeNotSupported 验证 Phase 1 不处理 WebSocket 升级，
-// 但不会崩溃。
-//
-// WebSocket 支持属于 Phase 2+。Phase 1 应该将升级请求转发给 upstream
-// 或返回错误，但不能崩溃。实际上 httputil.ReverseProxy 支持 WebSocket 升级，
-// 但 Phase 1 不将其作为测试重点。
-func TestProxy_WebSocketUpgradeNotSupported(t *testing.T) {
+// TestProxy_WebSocketUpgradeFailureForwarded 验证 Upgrade 请求由 ReverseProxy
+// 正常交给 upstream；upstream 拒绝升级时透传其 400，而不是 Gateway 崩溃或改写。
+// 完整双向 WebSocket 数据帧联调仍属于后续专项验证。
+func TestProxy_WebSocketUpgradeFailureForwarded(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 模拟 WebSocket 升级失败。
 		w.WriteHeader(http.StatusBadRequest)

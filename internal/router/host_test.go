@@ -17,8 +17,11 @@ func TestNormalizeHost(t *testing.T) {
 		{name: "IPv6 无端口带括号", input: "[2001:DB8::1]", want: "2001:db8::1"},
 		{name: "IPv6 带端口", input: "[2001:DB8::1]:8443", want: "2001:db8::1"},
 		{name: "IPv6 无括号无端口", input: "2001:DB8::1", want: "2001:db8::1"},
-		{name: "非法端口保守保留", input: "api.example.com:bad", want: "api.example.com:bad"},
-		{name: "多个尾点仅移除一个", input: "api.example.com..", want: "api.example.com."},
+		{name: "非法端口归一化为空", input: "api.example.com:bad", want: ""},
+		{name: "多个尾点归一化为空", input: "api.example.com..", want: ""},
+		{name: "非法 DNS 字符归一化为空", input: "foo_bar.example.com", want: ""},
+		{name: "label 前连字符归一化为空", input: "-bad.example.com", want: ""},
+		{name: "label 后连字符归一化为空", input: "bad-.example.com", want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,6 +97,10 @@ func TestMatchHost(t *testing.T) {
 		{name: "通配不匹配无前缀", pattern: "*.example.com", request: "example.com", want: false},
 		{name: "通配不匹配多层", pattern: "*.example.com", request: "a.b.example.com", want: false},
 		{name: "通配不匹配其他域名", pattern: "*.example.com", request: "a.other.com", want: false},
+		{name: "通配不匹配非法字符", pattern: "*.example.com", request: "foo_bar.example.com", want: false},
+		{name: "通配不匹配 label 前连字符", pattern: "*.example.com", request: "-bad.example.com", want: false},
+		{name: "通配不匹配 label 后连字符", pattern: "*.example.com", request: "bad-.example.com", want: false},
+		{name: "any 仍接收非法 host", pattern: "", request: "foo_bar.example.com", want: true},
 		{name: "大小写归一化后匹配", pattern: "api.example.com", request: "API.Example.com", want: true},
 		{name: "端口剥离后匹配", pattern: "api.example.com", request: "api.example.com:8080", want: true},
 		{name: "尾点剥离后匹配", pattern: "api.example.com", request: "api.example.com.", want: true},

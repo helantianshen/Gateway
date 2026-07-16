@@ -166,6 +166,7 @@ func parseRoute(r CompileInput, index int) (*parsedRoute, error) {
 	return &parsedRoute{
 		route: &compiledRoute{
 			routeID:      r.RouteID,
+			pathTemplate: r.Path,
 			upstreamID:   r.Upstream,
 			preserveHost: r.PreserveHost,
 			priority:     r.Priority,

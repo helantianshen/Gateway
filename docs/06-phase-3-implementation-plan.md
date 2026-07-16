@@ -1,9 +1,13 @@
 # Phase 3 实施计划：路由语义与不可变 Radix Tree
 
-> 状态：实施、提交前复盘和最终门禁全部完成  
-> 目标版本：v0.3.0（路由语义与 Radix Tree）  
-> Go Module：`github.com/helantianshen/gateway`  
-> Go Toolchain：`go1.26.3 linux/amd64`  
+> 状态：实施、提交前复盘和最终门禁全部完成
+>
+> 目标版本：v0.3.0（路由语义与 Radix Tree）
+>
+> Go Module：`github.com/helantianshen/gateway`
+>
+> Go Toolchain：`go1.26.3 linux/amd64`
+>
 > License：MIT
 
 ## 1. 目标
@@ -472,5 +476,7 @@ Oracle（gpt-5.6-sol）审查了本计划，提出以下关键反馈，已在计
 | 10,000 routes compile | 203–255 ms，约 10 MB，180136 allocs/op |
 
 旧基线 `bench-before-hardening.txt` 中 10,000 routes miss 为 472–640 µs、160072 B/op、10003 allocs/op；最终 miss 为约 0.34 µs、88 B/op、3 allocs/op。编译 10,000 路由的约 0.2 秒和 10 MB 分配可接受于 Phase 3 静态启动边界，但已列为 Phase 6/7 单次 Snapshot 编译与增量发布需要持续观察的成本。
+
+Phase 0–5 回溯审查在 Go 1.26.5、加入 PathTemplate 元数据和请求 Host DNS 校验后复跑：10,000 routes hit 为 `465–486 ns/op, 416 B/op, 4 allocs/op`，miss 为 `303–306 ns/op, 88 B/op, 3 allocs/op`，未出现规模退化。
 
 15 秒 Fuzz 原始结果保存在 `fuzz-path.txt`、`fuzz-conflict.txt`、`fuzz-match.txt`，三项目标均无 crash。

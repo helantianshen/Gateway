@@ -6,28 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
+          cache: true
 
-      - name: gofmt check
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Check diff whitespace
+        run: make check-diff
+
+      - name: Check gofmt
         run: make fmt-check
 
-      - name: go vet
+      - name: Run go vet
         run: make vet
 
-      - name: go test
+      - name: Run staticcheck
+        run: make staticcheck
+
+      - name: Scan reachable vulnerabilities
+        run: make vuln
+
+      - name: Run tests
         run: make test
 
-      - name: go test -race
+      - name: Run race detector
         run: make race
 
-      - name: go build
+      - name: Build packages
         run: make build

@@ -109,9 +109,3 @@ func TestLoadConfig_RejectsEmptyNullAndMultipleDocuments(t *testing.T) {
 		})
 	}
 }
-
-// wantWithPath 保留为兼容辅助函数；空文件、null 和多文档的边界错误现在直接
-// 检查路径和消息内容是否同时出现在错误中，不再依赖固定拼接格式。
-func wantWithPath(path, message string) string {
-	return path + ": " + message
-}

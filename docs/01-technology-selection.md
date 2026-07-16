@@ -1,8 +1,8 @@
 # API 网关技术选型
 
-> 状态：已确定，可作为项目初始化依据
-> 调研日期：2026-07-12
-> 本机环境：`go version go1.26.3 linux/amd64`
+> 状态：已确定；Phase 0–5 审查后更新运行时与已落地依赖
+> 调研日期：2026-07-12；最近审查：2026-07-16
+> 当前环境：`go version go1.26.5 linux/amd64`
 
 ## 1. 选型目标
 
@@ -20,11 +20,12 @@
 
 | 领域 | 最终选择 | 版本基线 | 决策说明 |
 |---|---|---:|---|
-| Go | 官方 Go Toolchain | `go1.26.3` | 使用本机 WSL 已安装版本；初始化时在 `go.mod` 固定 Go/toolchain 基线 |
+| Go | 官方 Go Toolchain | `go1.26.5` | 固定到修复已知标准库漏洞的 patch 版本；`go.mod` 与 CI 保持一致 |
 | 仓库组织 | 单仓库、单 Go Module、多个二进制 | - | 初期不使用多 Module 或 `go.work`，降低依赖与发布复杂度 |
 | 构建 | Go Modules + Makefile | - | Makefile 只封装高频命令，不隐藏核心构建逻辑 |
-| 静态检查 | `go vet` + golangci-lint | 实施时锁定 | CI 中固定版本，避免开发机与 CI 结果漂移 |
-| CI | GitHub Actions | - | 执行 format、lint、unit、race、integration 和 image build |
+| 静态检查 | `go vet` + staticcheck | `honnef.co/go/tools v0.7.0` | CI 使用固定版本；golangci-lint 如后续引入需单独评估规则与误报 |
+| 漏洞扫描 | govulncheck | `golang.org/x/vuln v1.6.0` | 扫描可达标准库/依赖漏洞；Phase 0–5 审查据此升级 Go 与 x/sys |
+| CI | GitHub Actions | checkout v4 / setup-go v5 | 当前执行 module verify、whitespace、format、vet、staticcheck、govulncheck、unit、race、build；integration/image 在 Phase 11 加入 |
 
 ### 2.2 控制面
 
@@ -33,7 +34,7 @@
 | Web 框架 | Gin | `github.com/gin-gonic/gin v1.12.0` | 只用于管理 API，不进入代理热路径 |
 | 参数校验 | Gin binding + validator | `github.com/go-playground/validator/v10` | 结构校验后仍需执行跨资源语义校验 |
 | API 契约 | OpenAPI 3.x 文档 | `api/openapi/control-plane.yaml` | 优先维护显式 API 契约，初期不强制引入复杂代码生成 |
-| 持久化 | etcd 官方 Client v3 | `go.etcd.io/etcd/client/v3 v3.6.13` | 与本机 Go 1.26.3 兼容且比刚发布的 v3.7.0 更稳妥 |
+| 持久化 | etcd 官方 Client v3 | `v3.7.0` 候选，Phase 6 锁定 | Go 已升级到 1.26.5，不再受 toolchain 阻塞；仍需通过 Watch/CAS/重连集成测试后写入 go.mod |
 
 控制面使用 `gin.New()`，显式安装 Recovery、zap、Trace 和管理端认证中间件，不使用 `gin.Default()`，避免默认日志与项目日志重复。
 
@@ -43,7 +44,7 @@
 |---|---|---|---|
 | HTTP Server | Go 标准库 | `net/http` | 语义标准、生态兼容、便于理解连接和超时模型 |
 | 反向代理 | Go 标准库 | `net/http/httputil.ReverseProxy` | 使用 `Rewrite`、`ProxyRequest.SetURL` 和自定义 Transport |
-| 路由 | 自研不可变 Radix Tree | `internal/dataplane/router` | 展示数据结构、冲突检测和请求侧无配置写锁的匹配能力 |
+| 路由 | 自研不可变 Radix Tree | `internal/router` | 展示数据结构、冲突检测和请求侧无配置写锁的匹配能力 |
 | 路由基准对照 | httprouter / ServeMux | `github.com/julienschmidt/httprouter v1.3.0` | 只用于行为差分和 benchmark，不作为主运行时依赖 |
 | 负载均衡 | 自研 Round Robin / Smooth Weighted Round Robin | 内部实现 | 与健康状态、连接数和配置快照结合，面试价值高 |
 | 本地限流 | Token Bucket | `golang.org/x/time/rate v0.15.0` | 用于单实例保护和 Redis 故障时的本地兜底 |
@@ -55,8 +56,8 @@
 
 | 领域 | 最终选择 | 推荐模块/版本 | 责任边界 |
 |---|---|---|---|
-| 启动配置 | YAML v3 | `go.yaml.in/yaml/v3 v3.0.4` | 监听地址、etcd/Redis/OTel 连接、启动模式等低频配置 |
-| 动态配置真相源 | etcd | client/server `v3.6.13` | 路由、上游、策略和版本指针；低频、强一致、可 Watch |
+| 启动配置 | YAML v3 | `gopkg.in/yaml.v3 v3.0.1` | 当前严格加载 upstream/route/policy；未来 bootstrap 连接参数仍属于 YAML/环境部署边界 |
+| 动态配置真相源 | etcd | client/server 同 minor，Phase 6 锁定 | 路由、上游、策略和版本指针；低频、强一致、可 Watch |
 | 高频运行时状态 | Redis | `github.com/redis/go-redis/v9 v9.21.0` | 分布式限流额度、短期 denylist 或幂等键 |
 | 数据面配置状态 | 不可变配置快照 | `atomic.Pointer[ConfigSnapshot]` | 每个请求只读取一次配置版本；健康、连接和限流状态由独立 Runtime Registry 管理 |
 
@@ -71,7 +72,7 @@
 
 | 领域 | 最终选择 | 推荐模块/版本 | 说明 |
 |---|---|---|---|
-| 结构化日志 | zap | `go.uber.org/zap v1.28.0` | 数据面使用强类型 `*zap.Logger`，成功访问日志可采样 |
+| 结构化日志 | zap | `go.uber.org/zap v1.28.0` | 当前每请求一条完成日志并显式禁用采样；未来只有在保留审计契约时才能增加受控采样 |
 | 指标 | Prometheus client_golang | `github.com/prometheus/client_golang v1.23.2` | 使用项目私有 Registry，避免全局注册冲突 |
 | Trace | OpenTelemetry Go | core/SDK/exporter `v1.44.0` | 通过 OTLP/gRPC 发送到 OTel Collector |
 | HTTP instrumentation | OTel contrib | `otelhttp/otelgin v0.69.0` | 数据面入口/出口用 `otelhttp`，控制面用 `otelgin` |
@@ -109,15 +110,15 @@ Docker Compose 只代表本地开发和集成环境，不在简历中表述为�
 
 ## 4. 版本策略
 
-### 4.1 为什么 etcd 暂定 v3.6.13
+### 4.1 etcd v3.7 候选的锁定条件
 
-截至调研日，etcd client v3 最新线是 v3.7.0，但其上游 toolchain 基线为 Go 1.26.5，而本机是 Go 1.26.3。项目初期选择成熟的 v3.6.13，并让 Compose 中的 etcd server 与 client 保持同一 minor/patch 线。
+Phase 0–5 安全审查已把 Go 升级到 1.26.5，原先阻止 etcd v3.7.0 的 toolchain 前提不再成立。Phase 6 可以从 v3.7.0 候选开始，但不得只因版本更新就直接写入运行依赖。
 
-升级到 v3.7.x 的条件：
+正式锁定条件：
 
-1. 本机 Go 升级到不低于上游要求；
-2. Watch compaction、lease、transaction 和断线重连集成测试通过；
-3. Compose 中 etcd server 与 client 兼容性验证完成。
+1. Watch compaction、lease、transaction、CAS 和断线重连集成测试通过；
+2. Compose 中 etcd server 与 client 使用同一 minor，并完成兼容性验证；
+3. `govulncheck`、race 和控制面集成测试无可达问题。
 
 ### 4.2 依赖锁定规则
 

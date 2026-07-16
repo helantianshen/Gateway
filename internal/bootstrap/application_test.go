@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"github.com/helantianshen/gateway/internal/config"
+	"github.com/helantianshen/gateway/internal/dataplane/requestctx"
+	"github.com/helantianshen/gateway/internal/dataplane/response"
 	"github.com/helantianshen/gateway/internal/dataplane/server"
 	"github.com/helantianshen/gateway/internal/dataplane/transport"
 )
@@ -181,12 +184,15 @@ func assertListenerClosed(t *testing.T, name string, listener net.Listener) {
 
 // TestApplication_LifecycleAndEndpoints 使用单个 Application 生命周期验证完整成功路径：
 // public/admin Server 经真实 HTTP 可访问、Context 取消触发 Graceful Shutdown，且 Run
-// 返回前两个底层 listener 均已关闭。成功代理链已由 proxy 包覆盖；此处让不支持的
-// upstream scheme 确定性返回 502，避免 bootstrap 再创建 TCP upstream。
+// 返回前两个底层 listener 均已关闭。成功代理链已由 proxy 包覆盖；此处连接 TCP
+// 端口 0 确定性返回 502，避免 bootstrap 再创建 TCP upstream。
 func TestApplication_LifecycleAndEndpoints(t *testing.T) {
 	app, err := newWithListen(testConfig(t), newUnixListenFunc(t))
 	if err != nil {
 		t.Fatalf("newWithListen 失败: %v", err)
+	}
+	if app.Logger() == nil {
+		t.Fatal("Application Logger 为空")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -217,15 +223,102 @@ func TestApplication_LifecycleAndEndpoints(t *testing.T) {
 	if status != http.StatusBadGateway {
 		t.Errorf("public 状态码 = %d, want %d", status, http.StatusBadGateway)
 	}
-	const wantBody = `{"code":"BAD_GATEWAY","message":"upstream request failed"}`
-	if body != wantBody {
-		t.Errorf("public 错误响应体 = %q, want %q", body, wantBody)
+	var errorBody response.ErrorBody
+	if err := json.Unmarshal([]byte(body), &errorBody); err != nil {
+		t.Fatalf("public 错误响应不是合法 JSON: %v; body=%s", err, body)
+	}
+	if errorBody.Code != "BAD_GATEWAY" || errorBody.Message != "upstream request failed" || !requestctx.ValidRequestID(errorBody.RequestID) {
+		t.Errorf("public 错误响应体 = %+v", errorBody)
 	}
 
 	cancel()
 	waitForRun(t, runErrCh)
 	assertListenerClosed(t, "public", app.publicListener)
 	assertListenerClosed(t, "admin", app.adminListener)
+}
+
+func TestApplication_ObservabilityEndpoints(t *testing.T) {
+	app, err := newWithListen(testConfig(t), newUnixListenFunc(t))
+	if err != nil {
+		t.Fatalf("newWithListen 失败: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- app.Run(ctx) }()
+
+	publicClient := newUnixHTTPClient(t, app.PublicAddr().String())
+	request, err := http.NewRequest(http.MethodGet, "http://public.local/observe-secret", nil)
+	if err != nil {
+		t.Fatalf("创建 public request: %v", err)
+	}
+	request.Header.Set(requestctx.RequestIDHeader, "application-request-1")
+	responseMessage, err := publicClient.Do(request)
+	if err != nil {
+		t.Fatalf("public request: %v", err)
+	}
+	responseBody, readErr := io.ReadAll(responseMessage.Body)
+	closeErr := responseMessage.Body.Close()
+	if readErr != nil || closeErr != nil {
+		t.Fatalf("读取/关闭 public response: read=%v close=%v", readErr, closeErr)
+	}
+	if responseMessage.StatusCode != http.StatusBadGateway || responseMessage.Header.Get(requestctx.RequestIDHeader) != "application-request-1" {
+		t.Fatalf("public response = status %d request-id %q body=%s", responseMessage.StatusCode, responseMessage.Header.Get(requestctx.RequestIDHeader), responseBody)
+	}
+	var gatewayError response.ErrorBody
+	if err := json.Unmarshal(responseBody, &gatewayError); err != nil || gatewayError.RequestID != "application-request-1" {
+		t.Fatalf("public error body = %+v, err=%v", gatewayError, err)
+	}
+
+	adminClient := newUnixHTTPClient(t, app.AdminAddr().String())
+	metricsResponse, err := adminClient.Get("http://admin.local/metrics")
+	if err != nil {
+		t.Fatalf("GET /metrics: %v", err)
+	}
+	metricsBody, readErr := io.ReadAll(metricsResponse.Body)
+	closeErr = metricsResponse.Body.Close()
+	if readErr != nil || closeErr != nil {
+		t.Fatalf("读取/关闭 metrics response: read=%v close=%v", readErr, closeErr)
+	}
+	if metricsResponse.StatusCode != http.StatusOK || !requestctx.ValidRequestID(metricsResponse.Header.Get(requestctx.RequestIDHeader)) {
+		t.Fatalf("metrics response = status %d request-id %q", metricsResponse.StatusCode, metricsResponse.Header.Get(requestctx.RequestIDHeader))
+	}
+	metricsText := string(metricsBody)
+	for _, want := range []string{
+		`gateway_config_version 1`,
+		`gateway_requests_total{error_kind="BAD_GATEWAY",method="GET",status_class="5xx",upstream_id="mock-service"} 1`,
+		`gateway_upstream_active_requests{endpoint_id="mock-1",upstream_id="mock-service"} 0`,
+		`gateway_upstream_health{endpoint_id="mock-1",upstream_id="mock-service"} 1`,
+	} {
+		if !strings.Contains(metricsText, want) {
+			t.Errorf("metrics 缺少 %q", want)
+		}
+	}
+	if strings.Contains(metricsText, "/observe-secret") {
+		t.Errorf("metrics 泄露原始 path")
+	}
+
+	adminRequest, err := http.NewRequest(http.MethodGet, "http://admin.local/unknown", nil)
+	if err != nil {
+		t.Fatalf("创建 admin request: %v", err)
+	}
+	adminRequest.Header.Set(requestctx.RequestIDHeader, "admin-error-request")
+	adminResponse, err := adminClient.Do(adminRequest)
+	if err != nil {
+		t.Fatalf("admin unknown request: %v", err)
+	}
+	adminBody, readErr := io.ReadAll(adminResponse.Body)
+	closeErr = adminResponse.Body.Close()
+	if readErr != nil || closeErr != nil {
+		t.Fatalf("读取/关闭 admin error response: read=%v close=%v", readErr, closeErr)
+	}
+	var adminError response.ErrorBody
+	if err := json.Unmarshal(adminBody, &adminError); err != nil || adminResponse.StatusCode != http.StatusNotFound || adminError.RequestID != "admin-error-request" {
+		t.Fatalf("admin error response = status %d body %+v err=%v", adminResponse.StatusCode, adminError, err)
+	}
+
+	cancel()
+	waitForRun(t, runDone)
 }
 
 // TestApplication_AlreadyCancelledContext 验证传入已取消的 Context 时，Run 仍会
@@ -544,12 +637,10 @@ func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 
 	adminListener := newSignalListener()
 	started := make(chan struct{})
-	release := make(chan struct{})
 	requestDone := make(chan struct{})
-	publicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	publicHandler := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		close(started)
-		<-release
-		w.WriteHeader(http.StatusNoContent)
+		<-r.Context().Done()
 		close(requestDone)
 	})
 
@@ -557,7 +648,7 @@ func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 	cfg.ShutdownTimeout = 30 * time.Millisecond
 	app := &Application{
 		publicServer:   server.NewPublicServer(publicHandler),
-		adminServer:    server.NewAdminServer(server.NewAdminHandler()),
+		adminServer:    server.NewAdminServer(server.NewAdminHandler(nil)),
 		publicListener: publicListener,
 		adminListener:  adminListener,
 		transport:      transport.New(),
@@ -596,16 +687,19 @@ func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 		t.Errorf("Run 错误 = %v，不包含 Shutdown 超时错误", runErr)
 	}
 
-	// Shutdown 超时返回后仍需释放活跃 handler；随后读取响应，确保连接和请求
-	// goroutine 完整退出，再等待两个 Serve 侧 listener 的 Accept 循环结束。
-	close(release)
+	// Shutdown 超时后必须强制关闭连接并取消活跃请求 Context。
+	if err := conn.SetReadDeadline(time.Now().Add(testOperationTimeout)); err != nil {
+		t.Fatalf("设置连接读取 deadline: %v", err)
+	}
+	if _, err := io.ReadAll(conn); err != nil {
+		if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
+			t.Fatalf("Shutdown 超时后客户端连接仍未关闭: %v", err)
+		}
+	}
 	select {
 	case <-requestDone:
 	case <-time.After(testOperationTimeout):
-		t.Fatal("释放后 public handler 未结束")
-	}
-	if _, err := io.ReadAll(conn); err != nil {
-		t.Fatalf("读取释放后的 public 响应失败: %v", err)
+		t.Fatal("Shutdown 超时后活跃请求 Context 未取消")
 	}
 	select {
 	case <-publicListener.serveDone:

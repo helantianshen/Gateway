@@ -1,0 +1,24 @@
+goos: linux
+goarch: amd64
+pkg: github.com/helantianshen/gateway/internal/dataplane/middleware
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
+BenchmarkHTTPMiddleware/baseline-16         	190692962	         6.489 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTPMiddleware/baseline-16         	191118622	         6.368 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTPMiddleware/baseline-16         	181965556	         6.231 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger-16         	  752787	      1552 ns/op	    1296 B/op	      20 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger-16         	  700261	      1603 ns/op	    1296 B/op	      20 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger-16         	  749796	      1660 ns/op	    1296 B/op	      20 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger_with_metrics-16         	  551472	      2003 ns/op	    1297 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger_with_metrics-16         	  577224	      2029 ns/op	    1297 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_nop_logger_with_metrics-16         	  501946	      2131 ns/op	    1297 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger-16                     	  345489	      3617 ns/op	    2454 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger-16                     	  342990	      3533 ns/op	    2454 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger-16                     	  348873	      3531 ns/op	    2454 B/op	      21 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger_with_metrics-16        	  254616	      4056 ns/op	    2456 B/op	      22 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger_with_metrics-16        	  306280	      4052 ns/op	    2456 B/op	      22 allocs/op
+BenchmarkHTTPMiddleware/phase5_json_logger_with_metrics-16        	  311457	      4008 ns/op	    2456 B/op	      22 allocs/op
+PASS
+ok  	github.com/helantianshen/gateway/internal/dataplane/middleware	20.973s
+Go version: go version go1.26.5 linux/amd64
+Date: 2026-07-15T17:40:42Z
+Command: go test -run=^$ -bench=BenchmarkHTTPMiddleware -benchmem -count=3 ./internal/dataplane/middleware/

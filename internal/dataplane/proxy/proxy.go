@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/helantianshen/gateway/internal/dataplane/requestctx"
 	"github.com/helantianshen/gateway/internal/dataplane/response"
 )
 
@@ -112,6 +113,13 @@ func New(target *url.URL, rt http.RoundTripper, timeout time.Duration, preserveH
 			clearExtraForwardedHeaders(r.Out.Header)
 		},
 
+		// 外层 RequestID 中间件已在 client ResponseWriter 上设置可信单值。删除
+		// upstream 返回的同名 Header，避免 ReverseProxy copyHeader 追加伪造值或重复值。
+		ModifyResponse: func(responseMessage *http.Response) error {
+			responseMessage.Header.Del(requestctx.RequestIDHeader)
+			return nil
+		},
+
 		// ErrorHandler 处理 upstream 请求失败的情况。
 		// 该回调仅在响应头尚未写出时被调用（RoundTrip 错误、ModifyResponse 错误等）。
 		// 响应头已写出后的 body copy 错误不会触发此回调，
@@ -161,43 +169,46 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // 调用时机（仅在响应头尚未写出时）：
 //   - RoundTrip 返回错误（upstream 连接失败、TLS 错误、超时等）；
-//   - ModifyResponse 返回错误（Phase 1 未设置 ModifyResponse）；
+//   - ModifyResponse 返回错误（当前仅用于清除 upstream 伪造的 X-Request-ID）；
 //   - 协议升级错误。
 //
 // 错误分类：
+//   - 请求体超过 Guard 上限 → 413；
 //   - 超时类错误（Context DeadlineExceeded、net.Error Timeout）→ 504；
 //   - 其他所有错误（连接拒绝、DNS 失败、协议错误等）→ 502。
 //
 // 安全性：
 //   - 不在响应中暴露 upstream 地址或底层错误文本；
-//   - 使用通用错误消息，防止信息泄漏。
-//   - 客户端取消（context.Canceled）不写错误响应，因为客户端已断开。
+//   - 使用通用错误消息，防止信息泄漏；
+//   - 客户端取消只写入 RequestContext，不尝试向已断开的客户端写响应。
 func errorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	// 客户端主动取消请求时，Context 被取消。
-	// 此时客户端已断开连接，写错误响应没有意义且可能导致日志噪声。
 	if errors.Is(err, context.Canceled) {
+		if metadata, ok := requestctx.FromContext(r.Context()); ok {
+			metadata.SetErrorKind("CLIENT_CANCELED")
+			metadata.SetObservedStatus(499)
+		}
 		return
 	}
 
-	// 判断是否为超时错误。
-	// context.DeadlineExceeded：请求总超时或 Transport 的 ResponseHeaderTimeout 触发。
+	// 未知长度的流式请求体由 http.MaxBytesReader 在实际读取时触发该错误。
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		response.WriteError(w, r, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "request body too large")
+		return
+	}
+
 	if errors.Is(err, context.DeadlineExceeded) {
-		response.WriteError(w, http.StatusGatewayTimeout, "GATEWAY_TIMEOUT", "upstream request timed out")
+		response.WriteError(w, r, http.StatusGatewayTimeout, "GATEWAY_TIMEOUT", "upstream request timed out")
 		return
 	}
 
-	// net.Error 的 Timeout() 方法返回 true 时表示网络层超时
-	//（如 Dial 超时、TLS 握手超时、ResponseHeader 超时）。
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		response.WriteError(w, http.StatusGatewayTimeout, "GATEWAY_TIMEOUT", "upstream request timed out")
+		response.WriteError(w, r, http.StatusGatewayTimeout, "GATEWAY_TIMEOUT", "upstream request timed out")
 		return
 	}
 
-	// 所有其他错误归类为 502 Bad Gateway。
-	// 包括但不限于：连接被拒绝、DNS 解析失败、TLS 证书验证失败、协议错误。
-	// 不暴露底层错误详情，使用通用消息。
-	response.WriteError(w, http.StatusBadGateway, "BAD_GATEWAY", "upstream request failed")
+	response.WriteError(w, r, http.StatusBadGateway, "BAD_GATEWAY", "upstream request failed")
 }
 
 // clearExtraForwardedHeaders 清除客户端注入的非标准 X-Forwarded-* 头。

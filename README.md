@@ -1,49 +1,34 @@
 # Gateway
 
-一个用 Go 标准库实现的 API 网关，基于 `net/http` 与 `httputil.ReverseProxy` 构建数据面，支持双 HTTP Server 生命周期、优雅停机、共享连接池、自研不可变压缩 Radix Tree 路由，以及并发安全的健康感知 Round Robin。
+一个以 Go `net/http` 与 `httputil.ReverseProxy` 为数据面核心的 API 网关，支持双 Server 生命周期、优雅停机、共享连接池、不可变压缩 Radix Tree、健康感知 Round Robin、请求上下文、结构化日志和 Prometheus 指标。
 
-> 当前版本：**Phase 4** — Upstream Pool 与 Round Robin
+> 当前版本：**Phase 5** — 中间件、结构化日志与 Prometheus
 
 ## 架构
 
 ```text
-客户端
-  │
-  ▼
-┌───────────────────────────────────────────────┐
-│  Gateway                                       │
-│                                                │
-│  public Server (:8080)                         │
-│  ├─ GatewayHandler                             │
-│  │  ├─ ParsePath（%XX、编码斜杠、dot segment）  │
-│  │  ├─ Router.Match（Host → Method → Path）     │
-│  │  ├─ 400 Bad Request（非法路径）              │
-│  │  ├─ 404 Not Found（无匹配路由）              │
-│  │  └─ CompiledUpstream.Select（健康过滤 + RR）   │
-│  │     ├─ 无健康 endpoint → 503                  │
-│  │     └─ 固定 endpoint Proxy                    │
-│  │        ├─ Rewrite（SetURL + preserveHost）     │
-│  │        ├─ 请求总超时 (Context)                │
-│  │        └─ 502 / 504 错误分类                  │
-│  │              │                               │
-│  │              ▼                               │
-│  共享 http.Transport                            │
-│  ├─ 连接池 (MaxConnsPerHost)                   │
-│  ├─ TLS / HTTP2 协商                            │
-│  └─ CloseIdleConnections (停机时)              │
-│                                                │
-│  admin Server (:9090)                          │
-│  ├─ GET/HEAD /livez                            │
-│  └─ GET/HEAD /readyz                          │
-└───────────────────────────────────────────────┘
-  │
-  ▼
-upstream 服务
+Client
+  -> RequestContext / X-Request-ID / traceparent placeholder
+  -> Access Log + Request Metrics
+  -> Recovery
+  -> Header & Body Guard
+  -> ParsePath
+  -> Router.Match
+  -> Compiled Route Policy Chain
+  -> CompiledUpstream.Select (healthy filter + Round Robin)
+  -> Fixed Endpoint Proxy
+  -> Shared http.Transport
+  -> Upstream
+
+admin Server (:9090)
+  -> /livez
+  -> /readyz
+  -> /metrics (private Prometheus Registry)
 ```
 
 ## 快速开始
 
-默认配置包含三个 mock endpoint，需要分别启动三个进程：
+需要 Go `1.26.5` 或更高兼容 patch 版本。默认配置包含三个 mock endpoint，需要分别启动三个进程：
 
 ```bash
 # 终端 1 / 2 / 3
@@ -81,20 +66,21 @@ curl -i -H 'Host: app.example.com' 'http://127.0.0.1:8080/hello'
 # GET catch-all 路由
 curl -i 'http://127.0.0.1:8080/anything/here'
 
-# 非法编码斜杠返回 400
-curl -i 'http://127.0.0.1:8080/objects%2F123'
+# 非法编码斜杠返回 400；Header 和 JSON body 使用同一个 request ID
+curl -i -H 'X-Request-ID: demo-bad-path' 'http://127.0.0.1:8080/objects%2F123'
 
 # 未配置的非 GET 请求返回 404
 curl -i -X DELETE 'http://127.0.0.1:8080/anything/here'
 
-# 健康端点
+# 健康端点与 Prometheus 指标
 curl -i http://127.0.0.1:9090/livez
 curl -i http://127.0.0.1:9090/readyz
+curl -s http://127.0.0.1:9090/metrics | grep '^gateway_'
 ```
 
 ## 配置
 
-YAML 是 upstream、endpoint、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。默认 Phase 4 示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
+YAML 是 upstream、endpoint、route 和 policy 等业务配置的唯一事实来源；环境变量只保存随部署环境变化的本地启动参数。Phase 5 沿用严格 schema，不把日志或指标开关塞入环境变量。默认示例位于 [`configs/gateway.yaml`](configs/gateway.yaml)。
 
 ### YAML 业务配置
 
@@ -189,18 +175,22 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │   ├── gateway/            # 网关进程入口
 │   └── mock-service/       # 本地演示 upstream
 ├── configs/
-│   └── gateway.yaml        # Phase 4 三 endpoint YAML 示例配置
+│   └── gateway.yaml        # Phase 5 三 endpoint YAML 示例配置
 ├── internal/
 │   ├── bootstrap/          # 应用生命周期：双 Server、Router、GatewayHandler、Run、Graceful Shutdown
 │   ├── config/             # 严格 YAML、启动参数、校验与强类型编译
 │   ├── dataplane/
-│   │   ├── gateway/        # ParsePath → Router → Upstream → Endpoint Proxy
+│   │   ├── gateway/        # ParsePath → Router → Policy → Upstream → Proxy
+│   │   ├── middleware/     # Request ID、Observe、Recovery、Guard
+│   │   ├── requestctx/     # 请求级 Route/Endpoint/结果元数据
+│   │   ├── policy/         # 不可变 route policy chain
 │   │   ├── balancer/       # 原子 CAS Round Robin
 │   │   ├── upstream/       # CompiledUpstream、EndpointState 与 active request
 │   │   ├── proxy/          # httputil.ReverseProxy 封装（含 preserveHost）
-│   │   ├── server/         # HTTP Server 与健康端点
+│   │   ├── server/         # public/admin Server 与运维端点
 │   │   ├── transport/      # 共享 http.Transport
-│   │   └── response/       # 统一 JSON 错误响应
+│   │   └── response/       # 含 request_id 的统一 JSON 错误
+│   ├── observability/      # zap 与私有 Prometheus Registry
 │   └── router/             # 不可变压缩 Radix Tree 路由匹配器
 │       ├── spec.go         # MatchResult、MatchError、Router 类型定义
 │       ├── tree.go         # buildNode → compressStaticEdges → freezeNode
@@ -216,7 +206,8 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 ├── benchmarks/
 │   └── results/
 │       ├── router/         # Router benchmark 与 fuzz 原始结果
-│       └── balancer/       # Round Robin benchmark 原始结果
+│       ├── balancer/       # Round Robin benchmark 原始结果
+│       └── observability/  # Phase 5 真实进程联调证据
 ├── docs/
 │   ├── 01-technology-selection.md
 │   ├── 02-architecture-design.md
@@ -224,9 +215,10 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │   ├── 04-phase-0-1-implementation-plan.md
 │   ├── 05-phase-2-implementation-plan.md
 │   ├── 06-phase-3-implementation-plan.md
-│   └── 07-phase-4-implementation-plan.md
+│   ├── 07-phase-4-implementation-plan.md
+│   └── 08-phase-5-implementation-plan.md
 ├── .github/workflows/ci.yml
-├── Makefile                # fmt / vet / test / race / build / benchmark / fuzz
+├── Makefile                # verify / audit / benchmark / fuzz / run
 ├── go.mod
 ├── LICENSE                 # MIT
 └── CONTRIBUTING.md
@@ -259,6 +251,22 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 
 非法路径返回 `400 Bad Request`，无匹配路由返回 `404 Not Found`。
 
+### 请求上下文与全局中间件
+
+每个请求在最外层创建独立 `RequestContext`。GatewayHandler 把编译期 `route_id/path_template/upstream_id` 和实际 `endpoint_id` 写入同一个对象，外层日志和指标在 Handler 返回后读取，不重新匹配原始 URL。
+
+实际链路为 `Request ID → Trace 占位 → Observe → Recovery → Guard → GatewayHandler`。Observe 位于 Recovery 外侧，因此 panic 转成 500 后能记录正确最终状态；`http.ErrAbortHandler` 和响应开始后的 panic 只中断连接，不二次改写响应。
+
+`X-Request-ID` 只接受长度 1–128 的 `[A-Za-z0-9._-]`；缺失或非法时生成 32 位小写十六进制 ID。该 ID 同时进入响应 Header、网关错误 JSON、access log 和 upstream 请求 Header。
+
+Guard 限制请求头总大小 1 MiB、最多 100 个 Header 字段、请求体最大 64 MiB。未知长度 body 仍为流式读取，超限返回 413，不缓存完整 body。
+
+### 结构化日志与 Prometheus
+
+production access log 使用 zap JSON，每请求最多一条 `request completed`，包含 request/trace/route/upstream/endpoint、status、duration、attempts 和字节数。日志不读取 Authorization、Cookie、JWT、query value、原始 path 或 body。
+
+每个 Application 使用独立 Prometheus Registry。核心指标包括请求量、耗时、并发、拒绝、route、upstream、endpoint health/active 和静态 config version。Method 非标准值聚合为 `_OTHER`；route 数超过 1,000 时 `route_id/path_template` 聚合为 `_other`，原始 URL、request ID、用户 ID、IP 和错误文本永不作为 label。
+
 ### Upstream 与 Round Robin
 
 Router 只返回逻辑 `UpstreamID`；`CompiledUpstream` 再用私有 Round Robin cursor 从 endpoint pool 中选择健康节点。普通 RR 使用单调 `atomic.Uint64` 和 CAS，把 cursor 推进到实际选中位置之后：固定健康集合的序列确定，并发请求不会消费同一游标状态。选择热路径不分配内存。
@@ -273,16 +281,22 @@ Router 只返回逻辑 `UpstreamID`；`CompiledUpstream` 再用私有 Round Robi
 
 | 场景 | 状态码 | 说明 |
 |---|---|---|
-| 非法路径（编码斜杠、dot segment） | 400 | `ParsePath` 检测到非法编码 |
-| 无匹配路由 | 404 | `Router.Match` 未找到路由 |
-| 逻辑 upstream 的所有 endpoint 不健康 | 503 | `NO_HEALTHY_UPSTREAM`，不执行 RoundTrip |
-| upstream 连接失败 | 502 | 网络或协议错误 |
-| upstream 超时 | 504 | 响应头超时或请求总超时 |
+| Header 字段数超限 | 431 | `REQUEST_HEADER_FIELDS_TOO_LARGE` |
+| 请求体超过 64 MiB | 413 | `PAYLOAD_TOO_LARGE`，已知长度不执行 Proxy |
+| 非法路径（编码斜杠、dot segment） | 400 | `BAD_REQUEST` |
+| 无匹配路由 | 404 | `NOT_FOUND` |
+| 所有 endpoint 不健康 | 503 | `NO_HEALTHY_UPSTREAM`，不执行 RoundTrip |
+| upstream 连接失败 | 502 | `BAD_GATEWAY` |
+| upstream 超时 | 504 | `GATEWAY_TIMEOUT` |
+| 未写响应前发生 panic | 500 | `INTERNAL_ERROR` |
+| 客户端取消 | 内部记为 499 | 不向已断开的客户端写新响应 |
 | 响应头已写出后中断 | 原状态码 | 不二次改写，客户端收到部分响应 |
+
+所有由 Gateway 产生的 JSON 错误均包含 `code`、`message` 和 `request_id`。
 
 ### 优雅停机
 
-收到 `SIGINT`/`SIGTERM` 后，`Application.Run` 取消 Context，并发对 public/admin 两个 Server 执行 `Shutdown`，等待活跃请求完成或超时后关闭 Transport 空闲连接，进程退出。
+收到 `SIGINT`/`SIGTERM` 后，`Application.Run` 取消 Context，并发对 public/admin 两个 Server 执行 `Shutdown`，等待活跃请求完成或超时后关闭 Transport 空闲连接、刷新 production logger，然后退出。
 
 ## 开发
 
@@ -308,16 +322,22 @@ make bench
 # Round Robin Benchmark（结果保存到 benchmarks/results/balancer/）
 make bench-balancer
 
+# Phase 5 中间件 Benchmark（结果保存到 benchmarks/results/observability/）
+make bench-observability
+
 # Router Fuzz 测试（各 15 秒）
 make fuzz
 
-# 一键全部检查
-make fmt-check vet test race build
+# 本地核心门禁（不临时下载额外工具）
+make verify
+
+# 固定版本 staticcheck + govulncheck
+make audit
 ```
 
 ## 技术约束
 
-数据面代理和 HTTP 生命周期继续使用 Go 标准库；Phase 2 仅为严格 YAML 解析引入固定版本的 `gopkg.in/yaml.v3`。路由匹配器和普通 Round Robin 均为项目内实现，不引入第三方路由或负载均衡框架。Phase 4 不实现主动健康检查、SWRR、重试、动态配置、限流执行或路径 rewrite。
+数据面代理和 HTTP 生命周期继续使用 Go 标准库；严格 YAML 使用 `gopkg.in/yaml.v3`，结构化日志使用 `zap`，指标使用 Prometheus client，ResponseWriter 透明包装使用 `httpsnoop`。路由匹配器、route policy chain 和普通 Round Robin 均为项目内实现。Phase 5 不实现 JWT、限流、真正的 OTel SDK、主动健康检查、重试或动态配置。
 
 ## 开发路线
 
@@ -328,11 +348,11 @@ make fmt-check vet test race build
 | 2 | 配置模型与严格 YAML | ✅ 完成 |
 | 3 | 路由语义与 Radix Tree | ✅ 完成 |
 | 4 | Upstream 与 Round Robin | ✅ 完成 |
-| 5 | 中间件、日志与 Prometheus | — |
+| 5 | 中间件、日志与 Prometheus | ✅ 完成 |
 | 6 | Gin 控制面与 etcd 发布 | — |
 | 7 | Watch、ConfigSnapshot 与 LKG | — |
 
-完整路线见 [开发路线图](docs/03-development-roadmap.md)。
+完整路线见 [开发路线图](docs/03-development-roadmap.md)。Phase 0–5 的独立回溯发现、修复与验证证据见 [全量回溯审查报告](docs/09-phase-0-5-retrospective-audit.md)。
 
 ## License
 

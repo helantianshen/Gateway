@@ -61,12 +61,12 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 
 | Phase | 主题 | 建议耗时 | 版本归属 | 可演示结果 |
 |---:|---|---:|---|---|
-| 0 | 工程骨架与质量基线 | 2–3 天 | MVP | gateway 进程可构建、测试、优雅退出 |
-| 1 | 最小反向代理链路 | 4–6 天 | MVP | 一个请求可稳定代理到 mock upstream，代理契约被测试固定 |
-| 2 | 配置模型与严格 YAML | 4–6 天 | MVP | YAML 可校验并驱动代理，不合法配置拒绝启动 |
+| 0 | 工程骨架与质量基线 | 2–3 天 | MVP（已完成） | gateway 进程可构建、测试、优雅退出 |
+| 1 | 最小反向代理链路 | 4–6 天 | MVP（已完成） | 一个请求可稳定代理到 mock upstream，代理契约被测试固定 |
+| 2 | 配置模型与严格 YAML | 4–6 天 | MVP（已完成） | YAML 可校验并驱动代理，不合法配置拒绝启动 |
 | 3 | 路由语义与 Radix Tree | 1–2 周 | MVP（已完成） | host/method/path 规范、冲突检测、fuzz、benchmark |
 | 4 | Upstream 与 Round Robin | 1 周 | MVP（已完成） | 多实例 RR；注入健康状态后正确选择 |
-| 5 | 中间件、日志与指标 | 1 周 | MVP | 请求链有统一错误、结构化日志和 Prometheus 指标 |
+| 5 | 中间件、日志与指标 | 1 周 | MVP（已完成） | 请求链有统一错误、结构化日志和 Prometheus 指标 |
 | 6 | Gin 控制面与 etcd 发布 | 1–2 周 | 核心版 | validate、CAS publish、config version、复制式 rollback |
 | 7 | Watch、ConfigSnapshot 与 LKG | 1–2 周 | 核心版 | 多次发布不中断请求，失败保留 Last Known Good |
 | 8 | 主动健康检查与摘除 | 1 周 | 核心版 | upstream 故障自动摘除和恢复 |
@@ -87,7 +87,7 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 ### 工作内容
 
 - 初始化 Git 与单 Go Module；
-- 在 `go.mod` 中记录 Go 1.26.3/toolchain 基线；
+- 在 `go.mod` 中记录 Go toolchain 基线；Phase 0–5 安全审查后升级到 1.26.5；
 - 只创建 `cmd/gateway`；`cmd/control-plane` 延后到 Phase 6，避免长期维护无业务价值的空壳进程；
 - 实现统一启动、信号处理和 graceful shutdown 骨架；
 - 创建最小 Makefile：`fmt`、`vet`、`test`、`race`、`build`；
@@ -97,12 +97,12 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 
 ### 验收标准
 
-- [ ] `go build ./...` 成功；
-- [ ] `go test ./...` 成功；
-- [ ] `go test -race ./...` 成功；
-- [ ] gateway 进程收到 SIGTERM 后在超时内退出；
-- [ ] `cmd/*` 只负责依赖装配，不包含业务逻辑；
-- [ ] CI 在干净环境可复现执行。
+- [x] `go build ./...` 成功；
+- [x] `go test ./...` 成功；
+- [x] `go test -race ./...` 成功；
+- [x] gateway 进程收到 SIGTERM 后在超时内退出；
+- [x] `cmd/*` 只负责依赖装配，不包含业务逻辑；
+- [x] CI 在干净环境可复现执行。
 
 ### 暂不做
 
@@ -130,16 +130,16 @@ v1.1 不应在核心配置闭环、测试和压测尚未完成时提前开发。
 
 ### 验收标准
 
-- [ ] GET/POST 的 method、escaped path、query 和 body 正确转发；
-- [ ] Hop-by-hop headers、重复转发头和客户端伪造的 `X-Forwarded-*` 有明确清理测试；
-- [ ] 大请求体采用流式转发或受控限制，不为通用重试无上限缓存；
-- [ ] SSE/流式响应按预期 flush；upstream 在已写响应头后断连时不尝试改写为新的 502；
-- [ ] 客户端取消后 upstream context 被取消；
-- [ ] upstream 连接失败返回标准 502；
-- [ ] upstream 超时返回标准 504；
-- [ ] 多次请求复用 Transport，而不是每请求新建连接池；
-- [ ] `httptest` 覆盖成功、断连、慢响应、异常响应和响应头后断连；
-- [ ] 本阶段形成固定代理契约；Phase 10 只增加 Trace，不重新定义基础超时和错误语义；受限重试留到 v1.1。
+- [x] GET/POST 的 method、escaped path、query 和 body 正确转发；
+- [x] Hop-by-hop headers、重复转发头和客户端伪造的 `X-Forwarded-*` 有明确清理测试；
+- [x] 大请求体采用流式转发或受控限制，不为通用重试无上限缓存；
+- [x] SSE/流式响应按预期 flush；upstream 在已写响应头后断连时不尝试改写为新的 502；
+- [x] 客户端取消后 upstream context 被取消；
+- [x] upstream 连接失败返回标准 502；
+- [x] upstream 超时返回标准 504；
+- [x] 多次请求复用 Transport，而不是每请求新建连接池；
+- [x] `httptest` 覆盖成功、断连、慢响应、异常响应和响应头后断连；
+- [x] 本阶段形成固定代理契约；Phase 10 只增加 Trace，不重新定义基础超时和错误语义；受限重试留到 v1.1。
 
 ### 演示点
 
@@ -168,12 +168,12 @@ curl http://localhost:8080/hello
 
 ### 验收标准
 
-- [ ] 未知 YAML 字段导致失败；
-- [ ] route 引用不存在 upstream 时失败；
-- [ ] 非 http/https upstream URL 失败；
-- [ ] timeout、weight、rate 范围校验有表驱动测试；
-- [ ] 不合法配置不会启动 public listener；
-- [ ] 配置错误不包含 secret。
+- [x] 未知 YAML 字段导致失败；
+- [x] route 引用不存在 upstream 时失败；
+- [x] 非 http/https upstream URL 失败；
+- [x] timeout、weight、rate 范围校验有表驱动测试；
+- [x] 不合法配置不会启动 public listener；
+- [x] 配置错误不包含 secret。
 
 ---
 
@@ -201,17 +201,17 @@ curl http://localhost:8080/hello
 
 ### 验收标准
 
-- [ ] 相同输入在 Radix 与参考 matcher 中结果一致；
-- [ ] 路由结果不依赖配置插入顺序；
-- [ ] 冲突配置在发布/启动阶段被拒绝；
-- [ ] 路由规范表中的每个边界输入都有唯一期望结果和表驱动测试；
-- [ ] reference matcher 不复用 Radix 的解析、冲突或比较函数；
-- [ ] `go test -race` 无问题；
-- [ ] fuzz 在约定时长内无 crash；
-- [ ] benchmark 区分 hit/miss，记录 `ns/op`、`B/op`、`allocs/op`；
-- [ ] 10,000 路由 miss 不得退化为逐 static 子边线性扫描或每路由一次分配；
-- [ ] GatewayHandler 专项测试覆盖 400/404、HEAD fallback、多 upstream、preserveHost 和路由 Context；
-- [ ] benchmark 原始结果和提交前优化基线保存到 `benchmarks/results/router/`。
+- [x] 相同输入在 Radix 与参考 matcher 中结果一致；
+- [x] 路由结果不依赖配置插入顺序；
+- [x] 冲突配置在发布/启动阶段被拒绝；
+- [x] 路由规范表中的每个边界输入都有唯一期望结果和表驱动测试；
+- [x] reference matcher 不复用 Radix 的解析、冲突或比较函数；
+- [x] `go test -race` 无问题；
+- [x] fuzz 在约定时长内无 crash；
+- [x] benchmark 区分 hit/miss，记录 `ns/op`、`B/op`、`allocs/op`；
+- [x] 10,000 路由 miss 不得退化为逐 static 子边线性扫描或每路由一次分配；
+- [x] GatewayHandler 专项测试覆盖 400/404、HEAD fallback、多 upstream、preserveHost 和路由 Context；
+- [x] benchmark 原始结果和提交前优化基线保存到 `benchmarks/results/router/`。
 
 ### 面试准备
 
@@ -288,18 +288,31 @@ curl http://localhost:8080/hello
 
 ### 验收标准
 
-- [ ] 任意失败路径都有 request ID；
-- [ ] 每请求最多一条主要访问完成日志；
-- [ ] Authorization、Cookie、JWT 和 body 不进入默认日志；
-- [ ] `/metrics` 可被 Prometheus 抓取；
-- [ ] route 指标使用 `route_id/path_template`，不使用原始 path；
-- [ ] Registry 可在测试中重复创建，不发生重复注册 panic；
-- [ ] 本阶段已存在的 404/502/503/504 使用统一错误结构；429 在 Phase 9A 加入；
-- [ ] `route_id` 指标受 route series 预算控制，超过阈值时禁用或聚合，而不是无界创建时序。
+- [x] 任意失败路径都有 request ID；
+- [x] 每请求最多一条主要访问完成日志；
+- [x] Authorization、Cookie、JWT 和 body 不进入默认日志；
+- [x] `/metrics` 可被 Prometheus 抓取；
+- [x] route 指标使用 `route_id/path_template`，不使用原始 path；
+- [x] Registry 可在测试中重复创建，不发生重复注册 panic；
+- [x] 本阶段已存在的 404/502/503/504 使用统一错误结构；429 在 Phase 9A 加入；
+- [x] `route_id` 指标受 route series 预算控制，超过阈值时聚合为 `_other`。
+
+### 实施结果（2026-07-16）
+
+- RequestContext、Request ID、Trace 占位、Observe、Recovery 和流式 Header/Body Guard 已接入 public/admin 链；
+- route policy chain 在启动期编译，Phase 5 使用空策略链；
+- zap production JSON logger 禁用采样，每请求最多一条 `request completed`；
+- 私有 Prometheus Registry 暴露 request/route/upstream/endpoint/config 指标；
+- Gateway 生成的 400/404/413/431/500/502/503/504 使用统一 ErrorBody 和 request ID；客户端取消内部记录为 499；
+- ResponseWriter 与 request body 包装保留可选流式接口，SSE、取消和响应开始后中断契约通过回归；
+- 回溯修复后覆盖率：全仓 `86.7%`；RequestContext `85.5%`、Middleware `82.6%`、Policy `100%`、Observability `93.8%`；
+- production JSON logger + Metrics 基线约 `4.0–4.1 µs/op`、`2456 B/op`、`22 allocs/op`（Go 1.26.5）；
+- 三实例真实进程联调验证 RR、request ID、脱敏日志、template-only label、SSE、metrics 和 SIGTERM；
+- 原始证据保存在 `benchmarks/results/observability/`。
 
 ### MVP 完成检查点
 
-完成 Phase 0–5 后打 `v0.1.0`：
+Phase 0–5 已满足 `v0.1.0` 准备条件；tag 需在独立发布确认后创建：
 
 - 静态配置可运行；
 - 路由、负载均衡、代理和基础可观测闭环完整；

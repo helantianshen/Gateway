@@ -31,16 +31,25 @@ func main() {
 		log.Fatal("mock-service 实例 ID 不能为空")
 	}
 
+	server := &http.Server{
+		Addr:              *addr,
+		Handler:           newMockHandler(*instanceID),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	log.Printf("mock-service %s 启动于 %s", *instanceID, *addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("mock-service 启动失败: %v", err)
+	}
+}
+
+func newMockHandler(instanceID string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hello", handleHello)
 	mux.HandleFunc("/echo", handleEcho)
 	mux.HandleFunc("/slow", handleSlow)
 	mux.HandleFunc("/stream", handleStream)
-
-	log.Printf("mock-service %s 启动于 %s", *instanceID, *addr)
-	if err := http.ListenAndServe(*addr, withInstanceID(*instanceID, mux)); err != nil {
-		log.Fatalf("mock-service 启动失败: %v", err)
-	}
+	return withInstanceID(instanceID, mux)
 }
 
 // withInstanceID 为所有响应写入稳定实例 ID，便于通过真实 HTTP 请求观察网关的
@@ -67,19 +76,11 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleEcho 原样返回请求体。
-//
-// 用于验证代理正确转发请求体。
-// 响应的 Content-Type 与请求一致。
+// handleEcho 以流式 copy 原样返回请求体，不把完整 body 缓存在内存。
 func handleEcho(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "读取请求体失败", http.StatusBadRequest)
-		return
-	}
 	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	_, _ = io.Copy(w, r.Body)
 }
 
 // handleSlow 等待指定时长后返回。
@@ -92,16 +93,17 @@ func handleSlow(w http.ResponseWriter, r *http.Request) {
 		delayStr = "1s"
 	}
 	delay, err := time.ParseDuration(delayStr)
-	if err != nil {
+	if err != nil || delay <= 0 {
 		http.Error(w, "invalid delay", http.StatusBadRequest)
 		return
 	}
 
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
 	select {
 	case <-r.Context().Done():
-		// 客户端已断开，直接返回。
 		return
-	case <-time.After(delay):
+	case <-timer.C:
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -128,22 +130,24 @@ func handleStream(w http.ResponseWriter, r *http.Request) {
 		interval = 100 * time.Millisecond
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK)
-
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for i := 0; i < count; i++ {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-time.After(interval):
+		case <-ticker.C:
 		}
 		fmt.Fprintf(w, "data: event-%d\n\n", i)
 		flusher.Flush()

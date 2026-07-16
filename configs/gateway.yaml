@@ -1,4 +1,4 @@
-# Gateway Phase 4 可直接运行的示例配置。
+# Gateway Phase 5 可直接运行的示例配置。
 # 先分别启动 :18080、:18081、:18082 上的三个 mock-service，再启动 Gateway。
 # 同一逻辑 upstream 的三个 endpoint 使用普通 Round Robin；当前不按 weight 加权。
 api_version: v1
@@ -66,6 +66,6 @@ routes:
 
 policies:
   request_timeout: 3s
-  # rate 与 burst 在 Phase 4 仅解析和校验，尚不执行限流。
+  # rate 与 burst 在 Phase 5 仅解析和校验；route policy chain 已建立，但尚不执行限流。
   rate: 0
   burst: 0

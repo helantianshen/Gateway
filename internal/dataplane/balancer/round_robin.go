@@ -5,9 +5,8 @@ import "sync/atomic"
 
 // RoundRobin 是并发安全的普通轮询选择器。
 //
-// cursor 使用单调 uint64 序号而不是在 [0, count) 内循环写回。Select 通过 CAS
-// 预留下一个实际可用的位置，因此多个并发请求不会同时消费同一个游标状态；uint64
-// 回绕在实际进程生命周期内不可达，且即使回绕，取模后的选择语义仍然成立。
+// cursor 通常使用单调 uint64 序号；接近回绕点时重基准到当前候选范围。Select 通过
+// CAS 预留下一个实际可用的位置，因此多个并发请求不会同时消费同一个游标状态。
 type RoundRobin struct {
 	cursor atomic.Uint64
 }
@@ -28,11 +27,12 @@ func (r *RoundRobin) Select(count int, available func(index int) bool) (int, boo
 	candidateCount := uint64(count)
 	for {
 		start := r.cursor.Load()
+		startIndex := start % candidateCount
 		selectedIndex := -1
 		selectedOffset := 0
 
 		for offset := 0; offset < count; offset++ {
-			index := int((start + uint64(offset)) % candidateCount)
+			index := int((startIndex + uint64(offset)) % candidateCount)
 			if available(index) {
 				selectedIndex = index
 				selectedOffset = offset
@@ -45,7 +45,13 @@ func (r *RoundRobin) Select(count int, available func(index int) bool) (int, boo
 
 		// 游标推进到实际命中位置之后。CAS 失败表示其他 goroutine 已完成选择，
 		// 必须基于新游标重新检查健康状态，不能返回旧选择。
-		next := start + uint64(selectedOffset) + 1
+		advance := uint64(selectedOffset) + 1
+		next := start + advance
+		if next < start {
+			// uint64 回绕会丢失完整轮次对非 2 次幂 count 的模信息；只在此极端
+			// 边界把游标重基准到数学意义上的下一个候选。
+			next = (startIndex + advance) % candidateCount
+		}
 		if r.cursor.CompareAndSwap(start, next) {
 			return selectedIndex, true
 		}

@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/helantianshen/gateway/internal/dataplane/middleware"
+	"github.com/helantianshen/gateway/internal/dataplane/policy"
+	"github.com/helantianshen/gateway/internal/dataplane/requestctx"
 	"github.com/helantianshen/gateway/internal/dataplane/response"
 	"github.com/helantianshen/gateway/internal/dataplane/upstream"
 	"github.com/helantianshen/gateway/internal/router"
@@ -28,6 +33,14 @@ type capturedRequest struct {
 type captureRoundTripper struct {
 	requests chan capturedRequest
 }
+
+type routeMiddlewareFunc func(http.Handler) http.Handler
+
+func (f routeMiddlewareFunc) Wrap(next http.Handler) http.Handler { return f(next) }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func (rt *captureRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	match, _ := MatchResultFromContext(req.Context())
@@ -257,6 +270,139 @@ func TestGatewayHandlerReturnsBadGatewayForUncompiledProxyMode(t *testing.T) {
 	case request := <-rt.requests:
 		t.Fatalf("缺失 Proxy 模式不应发送请求: %+v", request)
 	default:
+	}
+}
+
+func TestGatewayErrorsCarryRequestIDThroughPublicMiddleware(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		routes     []router.CompileInput
+		roundTrip  roundTripFunc
+		unhealthy  bool
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "bad request",
+			path:       "/objects%2F123",
+			routes:     []router.CompileInput{{RouteID: "all", Path: "/*path", Upstream: "api"}},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "BAD_REQUEST",
+		},
+		{
+			name:       "not found",
+			path:       "/missing",
+			routes:     []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}},
+			wantStatus: http.StatusNotFound,
+			wantCode:   "NOT_FOUND",
+		},
+		{
+			name:   "bad gateway",
+			path:   "/api",
+			routes: []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}},
+			roundTrip: func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("connection failed")
+			},
+			wantStatus: http.StatusBadGateway,
+			wantCode:   "BAD_GATEWAY",
+		},
+		{
+			name:   "gateway timeout",
+			path:   "/api",
+			routes: []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}},
+			roundTrip: func(*http.Request) (*http.Response, error) {
+				return nil, context.DeadlineExceeded
+			},
+			wantStatus: http.StatusGatewayTimeout,
+			wantCode:   "GATEWAY_TIMEOUT",
+		},
+		{
+			name:       "no healthy upstream",
+			path:       "/api",
+			routes:     []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}},
+			unhealthy:  true,
+			wantStatus: http.StatusServiceUnavailable,
+			wantCode:   "NO_HEALTHY_UPSTREAM",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := mustCompileRouter(t, test.routes)
+			transport := http.RoundTripper(roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusNoContent, Header: make(http.Header), Body: http.NoBody}, nil
+			}))
+			if test.roundTrip != nil {
+				transport = test.roundTrip
+			}
+			compiled := mustCompileUpstream(t, "api", []string{"http://api.internal"}, upstream.ProxyModeDefault, transport)
+			if test.unhealthy {
+				endpoint, _ := compiled.Endpoint("api-0")
+				endpoint.State().SetHealthy(false)
+			}
+			handler := middleware.NewPublicHandler(
+				NewGatewayHandler(r, map[string]*upstream.CompiledUpstream{"api": compiled}),
+				middleware.Options{RequestIDGenerator: func() string { return "gateway-error-id" }},
+			)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://gateway.local"+test.path, nil))
+
+			if recorder.Code != test.wantStatus {
+				t.Fatalf("状态码 = %d, want %d; body=%s", recorder.Code, test.wantStatus, recorder.Body.String())
+			}
+			var body response.ErrorBody
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+				t.Fatalf("错误响应 JSON: %v", err)
+			}
+			if body.Code != test.wantCode || body.RequestID != "gateway-error-id" || recorder.Header().Get(requestctx.RequestIDHeader) != body.RequestID {
+				t.Fatalf("错误响应 = %+v header request-id=%q", body, recorder.Header().Get(requestctx.RequestIDHeader))
+			}
+		})
+	}
+}
+
+func TestGatewayHandlerExecutesCompiledPolicyBeforeEndpoint(t *testing.T) {
+	r := mustCompileRouter(t, []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}})
+	rt := &captureRoundTripper{requests: make(chan capturedRequest, 1)}
+	compiled := mustCompileUpstream(t, "api", []string{"http://api.internal"}, upstream.ProxyModeDefault, rt)
+	policyCalled := false
+	reject := routeMiddlewareFunc(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			policyCalled = true
+			match, ok := MatchResultFromContext(request.Context())
+			if !ok || match.RouteID != "api" || match.PathTemplate != "/api" {
+				t.Errorf("policy 收到 MatchResult = (%+v, %v)", match, ok)
+			}
+			w.WriteHeader(http.StatusTeapot)
+		})
+	})
+	handler, err := NewGatewayHandlerWithPolicies(
+		r,
+		map[string]*upstream.CompiledUpstream{"api": compiled},
+		map[string][]policy.Middleware{"api": {reject}},
+	)
+	if err != nil {
+		t.Fatalf("NewGatewayHandlerWithPolicies: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://gateway.local/api", nil))
+	if !policyCalled || recorder.Code != http.StatusTeapot {
+		t.Fatalf("policy 执行结果: called=%v status=%d", policyCalled, recorder.Code)
+	}
+	select {
+	case request := <-rt.requests:
+		t.Fatalf("policy 拒绝后不应请求 endpoint: %+v", request)
+	default:
+	}
+}
+
+func TestGatewayHandlerRejectsInvalidPolicyChain(t *testing.T) {
+	r := mustCompileRouter(t, []router.CompileInput{{RouteID: "api", Path: "/api", Upstream: "api"}})
+	handler, err := NewGatewayHandlerWithPolicies(r, nil, map[string][]policy.Middleware{"api": {nil}})
+	if err == nil || handler != nil {
+		t.Fatalf("非法 policy chain = (%v, %v), want (nil, error)", handler, err)
 	}
 }
 

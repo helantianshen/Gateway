@@ -7,20 +7,16 @@ import (
 	"testing"
 )
 
-// TestAdminHandler_Livez 验证 /livez 返回 200 和正确的 JSON 响应。
 func TestAdminHandler_Livez(t *testing.T) {
-	handler := NewAdminHandler()
+	handler := NewAdminHandler(nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/livez", nil))
 
-	req := httptest.NewRequest(http.MethodGet, "/livez", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("状态码 = %d, want %d", rec.Code, http.StatusOK)
+	if recorder.Code != http.StatusOK {
+		t.Errorf("状态码 = %d, want %d", recorder.Code, http.StatusOK)
 	}
-
 	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("JSON 解析失败: %v", err)
 	}
 	if body["status"] != "ok" {
@@ -28,20 +24,16 @@ func TestAdminHandler_Livez(t *testing.T) {
 	}
 }
 
-// TestAdminHandler_Readyz 验证 /readyz 返回 200 和正确的 JSON 响应。
 func TestAdminHandler_Readyz(t *testing.T) {
-	handler := NewAdminHandler()
+	handler := NewAdminHandler(nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
-	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("状态码 = %d, want %d", rec.Code, http.StatusOK)
+	if recorder.Code != http.StatusOK {
+		t.Errorf("状态码 = %d, want %d", recorder.Code, http.StatusOK)
 	}
-
 	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("JSON 解析失败: %v", err)
 	}
 	if body["status"] != "ready" {
@@ -49,30 +41,44 @@ func TestAdminHandler_Readyz(t *testing.T) {
 	}
 }
 
-// TestAdminHandler_UnknownPath404 验证未知 admin 路径返回 404。
 func TestAdminHandler_UnknownPath404(t *testing.T) {
-	handler := NewAdminHandler()
-
-	tests := []string{"/unknown", "/admin", "/health", "/"}
-	for _, path := range tests {
+	handler := NewAdminHandler(nil)
+	for _, path := range []string{"/unknown", "/admin", "/health", "/"} {
 		t.Run(path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusNotFound {
-				t.Errorf("路径 %q: 状态码 = %d, want %d", path, rec.Code, http.StatusNotFound)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+			if recorder.Code != http.StatusNotFound {
+				t.Errorf("路径 %q: 状态码 = %d, want %d", path, recorder.Code, http.StatusNotFound)
 			}
 		})
 	}
 }
 
-// TestPublicServer_Timeouts 验证 public Server 配置了安全超时。
-func TestPublicServer_Timeouts(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+func TestAdminHandler_Metrics(t *testing.T) {
+	calls := 0
+	metrics := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		_, _ = w.Write([]byte("gateway_requests_total 1\n"))
 	})
-	srv := NewPublicServer(handler)
+	handler := NewAdminHandler(metrics)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if recorder.Code != http.StatusOK || calls != 1 || recorder.Body.String() != "gateway_requests_total 1\n" {
+		t.Fatalf("metrics 响应 = code %d calls %d body %q", recorder.Code, calls, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/metrics", nil))
+	if recorder.Code != http.StatusMethodNotAllowed || calls != 1 {
+		t.Fatalf("POST /metrics = code %d calls %d", recorder.Code, calls)
+	}
+}
+
+func TestPublicServer_Timeouts(t *testing.T) {
+	srv := NewPublicServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
 
 	if srv.ReadHeaderTimeout != DefaultReadHeaderTimeout {
 		t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, DefaultReadHeaderTimeout)
@@ -80,7 +86,9 @@ func TestPublicServer_Timeouts(t *testing.T) {
 	if srv.IdleTimeout != DefaultIdleTimeout {
 		t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, DefaultIdleTimeout)
 	}
-	// 确保未设置会破坏 SSE 的超时。
+	if srv.MaxHeaderBytes != DefaultMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, DefaultMaxHeaderBytes)
+	}
 	if srv.WriteTimeout != 0 {
 		t.Errorf("WriteTimeout = %v, want 0（不应设置，会破坏 SSE）", srv.WriteTimeout)
 	}
@@ -89,23 +97,21 @@ func TestPublicServer_Timeouts(t *testing.T) {
 	}
 }
 
-// TestAdminServer_Timeouts 验证 admin Server 配置了安全超时。
 func TestAdminServer_Timeouts(t *testing.T) {
-	handler := NewAdminHandler()
-	srv := NewAdminServer(handler)
-
+	srv := NewAdminServer(NewAdminHandler(nil))
 	if srv.ReadHeaderTimeout != DefaultReadHeaderTimeout {
 		t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, DefaultReadHeaderTimeout)
 	}
 	if srv.IdleTimeout != DefaultIdleTimeout {
 		t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, DefaultIdleTimeout)
 	}
+	if srv.MaxHeaderBytes != DefaultMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, DefaultMaxHeaderBytes)
+	}
 }
 
-// TestAdminHandler_Methods 验证两个健康端点的完整方法语义矩阵，包括成功方法、
-// 非允许方法和 RFC 需要暴露给客户端的 Allow 头，避免只覆盖单一路径导致回归遗漏。
 func TestAdminHandler_Methods(t *testing.T) {
-	handler := NewAdminHandler()
+	handler := NewAdminHandler(nil)
 	methods := []struct {
 		name       string
 		method     string
@@ -121,16 +127,15 @@ func TestAdminHandler_Methods(t *testing.T) {
 	}
 
 	for _, path := range []string{"/livez", "/readyz"} {
-		for _, tc := range methods {
-			t.Run(path+"/"+tc.name, func(t *testing.T) {
-				req := httptest.NewRequest(tc.method, path, nil)
-				rec := httptest.NewRecorder()
-				handler.ServeHTTP(rec, req)
-				if rec.Code != tc.wantStatus {
-					t.Errorf("方法 %s %s: 状态码 = %d, want %d", tc.method, path, rec.Code, tc.wantStatus)
+		for _, test := range methods {
+			t.Run(path+"/"+test.name, func(t *testing.T) {
+				recorder := httptest.NewRecorder()
+				handler.ServeHTTP(recorder, httptest.NewRequest(test.method, path, nil))
+				if recorder.Code != test.wantStatus {
+					t.Errorf("方法 %s %s: 状态码 = %d, want %d", test.method, path, recorder.Code, test.wantStatus)
 				}
-				if allow := rec.Header().Get("Allow"); allow != tc.wantAllow {
-					t.Errorf("方法 %s %s: Allow = %q, want %q", tc.method, path, allow, tc.wantAllow)
+				if allow := recorder.Header().Get("Allow"); allow != test.wantAllow {
+					t.Errorf("方法 %s %s: Allow = %q, want %q", test.method, path, allow, test.wantAllow)
 				}
 			})
 		}

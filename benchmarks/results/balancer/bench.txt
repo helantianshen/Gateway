@@ -2,44 +2,44 @@ goos: linux
 goarch: amd64
 pkg: github.com/helantianshen/gateway/internal/dataplane/balancer
 cpu: AMD Ryzen 7 7735H with Radeon Graphics
-BenchmarkRoundRobin/healthy_1-16  	268334365	         5.145 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_1-16  	219625497	         4.889 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_1-16  	268323680	         4.877 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_10-16 	235949988	         4.876 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_10-16 	263674992	         5.015 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_10-16 	254596286	         5.741 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_100-16         	227680828	         4.537 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_100-16         	274704220	         4.406 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/healthy_100-16         	239547591	         5.054 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/sparse_healthy_100-16  	 6010885	       203.9 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/sparse_healthy_100-16  	 5275600	       196.0 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobin/sparse_healthy_100-16  	 6132675	       202.1 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobinParallel-16             	 8373910	       131.8 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobinParallel-16             	 7983355	       149.2 ns/op	       0 B/op	       0 allocs/op
-BenchmarkRoundRobinParallel-16             	 8587228	       137.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_1-16  	231372769	         5.382 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_1-16  	241026694	         5.011 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_1-16  	235417726	         5.060 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	241896124	         5.028 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	232279474	         5.058 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_10-16 	241683709	         5.047 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	247290100	         5.214 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	247719001	         5.148 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/healthy_100-16         	245952430	         5.686 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 6330243	       191.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 6321482	       198.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobin/sparse_healthy_100-16  	 6329128	       192.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 7628041	       141.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 9023467	       142.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinParallel-16             	 8052586	       147.3 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	24.694s
+ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	24.066s
 goos: linux
 goarch: amd64
 pkg: github.com/helantianshen/gateway/internal/dataplane/upstream
 cpu: AMD Ryzen 7 7735H with Radeon Graphics
-BenchmarkCompiledUpstreamSelect/healthy_1-16  	160218519	         7.306 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_1-16  	154424452	         7.196 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_1-16  	161432329	         7.213 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_10-16 	175094161	         7.158 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_10-16 	159024180	         8.085 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_10-16 	155489806	         8.093 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_100-16         	165140767	         7.378 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_100-16         	170225616	         7.236 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/healthy_100-16         	161589640	         7.307 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 5127799	       259.7 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4589121	       259.5 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4229068	       263.3 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelectParallel-16             	 6650223	       181.0 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelectParallel-16             	 6117865	       190.3 ns/op	       0 B/op	       0 allocs/op
-BenchmarkCompiledUpstreamSelectParallel-16             	 6264730	       200.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	154767994	         7.808 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	152307466	         7.514 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_1-16  	159527919	         8.239 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	155391934	         7.744 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	155339140	         8.180 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_10-16 	158709831	         7.661 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	157701835	         7.517 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	151578788	         7.734 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/healthy_100-16         	160564588	         7.756 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 5078659	       241.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4804812	       261.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelect/sparse_healthy_100-16  	 4456281	       243.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 6562252	       176.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 6635361	       178.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompiledUpstreamSelectParallel-16             	 7100457	       164.0 ns/op	       0 B/op	       0 allocs/op
 PASS
-ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	26.281s
-Go version: go version go1.26.3 linux/amd64
-Date: 2026-07-15T14:50:34Z
+ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	26.098s
+Go version: go version go1.26.5 linux/amd64
+Date: 2026-07-15T17:40:17Z
 Command: go test -run=^$ -bench='Benchmark(RoundRobin|CompiledUpstreamSelect)' -benchmem -count=3 ./internal/dataplane/balancer/ ./internal/dataplane/upstream/

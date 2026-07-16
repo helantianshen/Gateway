@@ -20,10 +20,12 @@ package router
 // MatchResult 是路由匹配成功时返回的结果。
 //
 // RouteID 和 UpstreamID 是配置中声明的稳定标识符。
+// PathTemplate 是编译期路径模式，只能用于日志和低基数指标，不能回退为原始 URL。
 // Params 是从路径参数段（:param）和 catch-all 段（*path）提取的解码后键值对。
 // PreserveHost 指示代理是否应保留客户端原始 Host 头。
 type MatchResult struct {
 	RouteID      string
+	PathTemplate string
 	UpstreamID   string
 	Params       map[string]string
 	PreserveHost bool
@@ -75,6 +77,7 @@ const (
 // 所有字段在编译后不可变。
 type compiledRoute struct {
 	routeID      string
+	pathTemplate string
 	upstreamID   string
 	preserveHost bool
 	priority     int

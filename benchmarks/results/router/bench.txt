@@ -1,45 +1,45 @@
 goos: linux
 goarch: amd64
 pkg: github.com/helantianshen/gateway/internal/router
-cpu: AMD Ryzen 7 7735H with Radeon Graphics        
-BenchmarkMatch/routes_10/hit-16         	 3514246	       359.4 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10/hit-16         	 3369679	       339.1 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10/hit-16         	 3697258	       337.0 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10/miss-16        	 5625507	       209.3 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_10/miss-16        	 5825607	       211.1 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_10/miss-16        	 4849429	       252.3 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_1000/hit-16       	 2611611	       425.5 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_1000/hit-16       	 2908098	       422.7 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_1000/hit-16       	 2453356	       442.0 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_1000/miss-16      	 3855840	       317.3 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_1000/miss-16      	 4290386	       299.1 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_1000/miss-16      	 4417519	       315.8 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_10000/hit-16      	 2377664	       495.3 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10000/hit-16      	 2519802	       483.2 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10000/hit-16      	 2234718	       589.2 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatch/routes_10000/miss-16     	 3412022	       338.3 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_10000/miss-16     	 3641462	       340.3 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatch/routes_10000/miss-16     	 3808874	       338.1 ns/op	      88 B/op	       3 allocs/op
-BenchmarkMatchParallel-16               	 4458349	       230.1 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchParallel-16               	 5823526	       239.2 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchParallel-16               	 5228958	       251.7 ns/op	     400 B/op	       4 allocs/op
-BenchmarkCompile/routes_10-16           	   81644	     14731 ns/op	   10496 B/op	     217 allocs/op
-BenchmarkCompile/routes_10-16           	   85900	     14491 ns/op	   10496 B/op	     217 allocs/op
-BenchmarkCompile/routes_10-16           	   83341	     14560 ns/op	   10496 B/op	     217 allocs/op
-BenchmarkCompile/routes_1000-16         	     273	   3905408 ns/op	  986784 B/op	   18059 allocs/op
-BenchmarkCompile/routes_1000-16         	     370	   3372815 ns/op	  986787 B/op	   18059 allocs/op
-BenchmarkCompile/routes_1000-16         	     364	   3552708 ns/op	  986789 B/op	   18059 allocs/op
-BenchmarkCompile/routes_10000-16        	       4	 255289246 ns/op	10049344 B/op	  180136 allocs/op
-BenchmarkCompile/routes_10000-16        	       5	 203551357 ns/op	10049344 B/op	  180136 allocs/op
-BenchmarkCompile/routes_10000-16        	       5	 213361136 ns/op	10049344 B/op	  180136 allocs/op
-BenchmarkMatchCatchAll-16               	 2179234	       489.4 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchCatchAll-16               	 2614798	       465.0 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchCatchAll-16               	 2317814	       514.9 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchHighFanOut-16             	 2355778	       532.7 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchHighFanOut-16             	 2741630	       469.5 ns/op	     400 B/op	       4 allocs/op
-BenchmarkMatchHighFanOut-16             	 2467456	       555.6 ns/op	     400 B/op	       4 allocs/op
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
+BenchmarkMatch/routes_10/hit-16         	 3601285	       342.7 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/hit-16         	 3680454	       330.2 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/hit-16         	 3687249	       325.5 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/miss-16        	 6095023	       193.2 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10/miss-16        	 6052147	       202.6 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10/miss-16        	 5926818	       207.4 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/hit-16       	 2937706	       420.3 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/hit-16       	 2717290	       403.1 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/hit-16       	 2993780	       439.1 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/miss-16      	 4402665	       246.1 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/miss-16      	 4928310	       258.4 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/miss-16      	 4912654	       250.7 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/hit-16      	 2605240	       464.6 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/hit-16      	 2441862	       485.7 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/hit-16      	 2554909	       467.9 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/miss-16     	 3938354	       303.0 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/miss-16     	 3735565	       306.1 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/miss-16     	 3760016	       302.6 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatchParallel-16               	 5560510	       225.6 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchParallel-16               	 4907055	       247.1 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchParallel-16               	 5071531	       208.7 ns/op	     416 B/op	       4 allocs/op
+BenchmarkCompile/routes_10-16           	   78560	     13793 ns/op	   10816 B/op	     217 allocs/op
+BenchmarkCompile/routes_10-16           	   89128	     13357 ns/op	   10816 B/op	     217 allocs/op
+BenchmarkCompile/routes_10-16           	   89587	     13673 ns/op	   10816 B/op	     217 allocs/op
+BenchmarkCompile/routes_1000-16         	     380	   3176758 ns/op	 1018788 B/op	   18059 allocs/op
+BenchmarkCompile/routes_1000-16         	     351	   3101369 ns/op	 1018789 B/op	   18059 allocs/op
+BenchmarkCompile/routes_1000-16         	     384	   3149716 ns/op	 1018793 B/op	   18059 allocs/op
+BenchmarkCompile/routes_10000-16        	       6	 217738238 ns/op	10369362 B/op	  180136 allocs/op
+BenchmarkCompile/routes_10000-16        	       6	 188990050 ns/op	10369344 B/op	  180136 allocs/op
+BenchmarkCompile/routes_10000-16        	       6	 196896412 ns/op	10369381 B/op	  180136 allocs/op
+BenchmarkMatchCatchAll-16               	 2799379	       431.6 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchCatchAll-16               	 2603486	       433.0 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchCatchAll-16               	 2674647	       457.9 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchHighFanOut-16             	 2780912	       425.5 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchHighFanOut-16             	 2802511	       423.3 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchHighFanOut-16             	 2826681	       444.2 ns/op	     416 B/op	       4 allocs/op
 PASS
-ok  	github.com/helantianshen/gateway/internal/router	58.260s
-Go version: go version go1.26.3 linux/amd64
-Date: 2026-07-15T13:29:02Z
+ok  	github.com/helantianshen/gateway/internal/router	58.278s
+Go version: go version go1.26.5 linux/amd64
+Date: 2026-07-15T17:39:23Z
 Command: go test -bench=. -benchmem -count=3 -run=^$ ./internal/router/

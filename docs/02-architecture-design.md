@@ -181,10 +181,10 @@ GET /api/user/profile
           v
 +-------------------------+
 | Global Middleware       |
-| 1. Recovery             |
-| 2. Request ID           |
-| 3. Trace Context        |
-| 4. Access Log / Metrics |
+| 1. Request Context / ID |
+| 2. Trace Context        |
+| 3. Access Log / Metrics |
+| 4. Recovery             |
 | 5. Header & Body Guard  |
 +-------------------------+
           |
@@ -220,7 +220,7 @@ GET /api/user/profile
       user-service
 ```
 
-Access Log 和 Metrics 使用外层包装，以便无论在哪一层失败都能记录最终状态和耗时。
+Access Log 和 Metrics 使用外层包装，Recovery 位于其内侧：panic 先被转换为最终 500，外层再记录正确状态、耗时和字节。
 
 ### 5.2 Config Snapshot 与 Runtime Registry
 
@@ -351,7 +351,8 @@ Phase 3 编码前必须把以下语义固化为表驱动测试 Oracle：
 | Host 大小写 | ASCII lowercase 后匹配 |
 | Host 端口 | 使用规范化 hostname，不把请求端口作为路由条件 |
 | Host 尾点 | 去除单个 DNS trailing dot 后匹配 |
-| 通配 Host | `*.example.com` 只匹配单层 label，不匹配 `example.com` 或 `a.b.example.com` |
+| 非法请求 Host | 非法 authority、DNS 字符或 label 边界归一化为空；不能命中 exact/wildcard，仍可由任意 Host 路由接收 |
+| 通配 Host | `*.example.com` 只匹配一个合法 DNS label，不匹配 `example.com`、`a.b.example.com` 或 `_bad.example.com` |
 | Method | 先精确匹配；HEAD 无显式路由时可回退到 GET 路由，但仍向 upstream 发送 HEAD |
 | Query | 完全不参与路由匹配，原样传递给 upstream |
 | Path 来源 | 使用 `URL.EscapedPath()` 建立稳定边界；非法转义直接 400 |
@@ -457,10 +458,12 @@ TransportKey = scheme + TLS config + timeout config + proxy config
 ### 9.1 中间件接口
 
 ```go
-type Handler func(*RequestContext) error
-
 type Middleware interface {
-    Wrap(next Handler) Handler
+    Wrap(next http.Handler) http.Handler
+}
+
+type CompiledChain struct {
+    handler http.Handler
 }
 ```
 
@@ -557,9 +560,9 @@ spec:
 
 ```json
 {
-  "code": "UPSTREAM_TIMEOUT",
+  "code": "GATEWAY_TIMEOUT",
   "message": "upstream request timed out",
-  "request_id": "01J..."
+  "request_id": "0123456789abcdef0123456789abcdef"
 }
 ```
 
@@ -567,14 +570,16 @@ spec:
 
 | HTTP | code | 场景 |
 |---:|---|---|
-| 400 | `BAD_REQUEST` | 无效请求头、非法路径或请求格式 |
-| 401 | `UNAUTHENTICATED` | JWT 缺失或无效 |
-| 404 | `ROUTE_NOT_FOUND` | 无匹配路由 |
-| 413 | `REQUEST_TOO_LARGE` | 超过 body 限制 |
-| 429 | `RATE_LIMITED` | 本地或 Redis 限流 |
+| 400 | `BAD_REQUEST` | 非法路径或请求格式 |
+| 401 | `UNAUTHENTICATED` | JWT 缺失或无效（Phase 9A） |
+| 404 | `NOT_FOUND` | 无匹配路由 |
+| 413 | `PAYLOAD_TOO_LARGE` | 超过 body 限制 |
+| 429 | `RATE_LIMITED` | 本地或 Redis 限流（Phase 9A/9B） |
+| 431 | `REQUEST_HEADER_FIELDS_TOO_LARGE` | Header 字段数超限 |
+| 500 | `INTERNAL_ERROR` | 响应开始前发生 panic |
 | 502 | `BAD_GATEWAY` | upstream 无效响应或连接异常 |
-| 503 | `UPSTREAM_UNAVAILABLE` | 无健康 endpoint、熔断或系统降级 |
-| 504 | `UPSTREAM_TIMEOUT` | upstream 超时 |
+| 503 | `NO_HEALTHY_UPSTREAM` | 无健康 endpoint |
+| 504 | `GATEWAY_TIMEOUT` | upstream 超时 |
 
 对外 message 不暴露内部地址、堆栈或依赖细节；详细原因进入结构化日志和 Trace。
 

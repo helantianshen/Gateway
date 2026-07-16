@@ -51,6 +51,10 @@ func TestDiff_RandomRoutes(t *testing.T) {
 						t.Errorf("迭代 %d: RouteID 不一致 (radix=%q, ref=%q)\n  routes=%v\n  segs=%v",
 							iter, radixResult.RouteID, refResult.RouteID, routes, segs)
 					}
+					if radixResult.PathTemplate != refResult.PathTemplate {
+						t.Errorf("迭代 %d: PathTemplate 不一致 (radix=%q, ref=%q)",
+							iter, radixResult.PathTemplate, refResult.PathTemplate)
+					}
 				}
 			}
 		}
@@ -90,6 +94,10 @@ func TestDiff_RandomRoutes(t *testing.T) {
 					if radixResult.RouteID != refResult.RouteID {
 						t.Errorf("迭代 %d: RouteID 不一致 (radix=%q, ref=%q)\n  host=%q method=%q segs=%v",
 							iter, radixResult.RouteID, refResult.RouteID, host, method, segs)
+					}
+					if radixResult.PathTemplate != refResult.PathTemplate {
+						t.Errorf("迭代 %d: PathTemplate 不一致 (radix=%q, ref=%q)",
+							iter, radixResult.PathTemplate, refResult.PathTemplate)
 					}
 				}
 			}
