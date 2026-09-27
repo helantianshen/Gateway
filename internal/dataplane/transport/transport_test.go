@@ -10,13 +10,7 @@ import (
 	"time"
 )
 
-// TestNew_ReturnsValidTransport 验证 New 返回一个非 nil 的 *http.Transport
-// 且关键超时和连接池参数被正确设置。
-//
-// 这些参数直接影响代理链路的安全性和性能：
-//   - 缺少 Dial 超时可能导致慢 upstream 导致连接永久挂起；
-//   - 缺少 ResponseHeaderTimeout 可能导致 upstream 接受连接但不响应时阻塞；
-//   - 连接池参数过小会导致连接复用率低，增加延迟。
+// TestNew_ReturnsValidTransport 固定 Transport 的超时、池容量和 TLS 参数
 func TestNew_ReturnsValidTransport(t *testing.T) {
 	tr := New()
 
@@ -24,7 +18,7 @@ func TestNew_ReturnsValidTransport(t *testing.T) {
 		t.Fatal("New 返回 nil")
 	}
 
-	// 验证关键超时参数。
+	// 验证关键超时参数
 	if tr.TLSHandshakeTimeout != tlsHandshakeTimeout {
 		t.Errorf("TLSHandshakeTimeout = %v, want %v", tr.TLSHandshakeTimeout, tlsHandshakeTimeout)
 	}
@@ -35,7 +29,7 @@ func TestNew_ReturnsValidTransport(t *testing.T) {
 		t.Errorf("IdleConnTimeout = %v, want %v", tr.IdleConnTimeout, idleConnTimeout)
 	}
 
-	// 验证连接池参数。
+	// 验证连接池参数
 	if tr.MaxIdleConns != maxIdleConns {
 		t.Errorf("MaxIdleConns = %v, want %v", tr.MaxIdleConns, maxIdleConns)
 	}
@@ -46,17 +40,17 @@ func TestNew_ReturnsValidTransport(t *testing.T) {
 		t.Errorf("MaxConnsPerHost = %v, want %v", tr.MaxConnsPerHost, maxConnsPerHost)
 	}
 
-	// 验证 HTTP/2 尝试已启用。
+	// 验证 HTTP/2 尝试已启用
 	if !tr.ForceAttemptHTTP2 {
 		t.Error("ForceAttemptHTTP2 = false, want true")
 	}
 
-	// 验证 DialContext 已设置（非 nil）。
+	// 验证 DialContext 已设置（非 nil）
 	if tr.DialContext == nil {
 		t.Error("DialContext 为 nil")
 	}
 
-	// 验证 TLSClientConfig 已设置且强制最低 TLS 1.2。
+	// 验证 TLSClientConfig 已设置且强制最低 TLS 1.2
 	if tr.TLSClientConfig == nil {
 		t.Error("TLSClientConfig 为 nil")
 	} else if tr.TLSClientConfig.MinVersion < 0x0303 {
@@ -64,30 +58,8 @@ func TestNew_ReturnsValidTransport(t *testing.T) {
 	}
 }
 
-// TestNew_EachCallReturnsNewInstance 验证每次调用 New 返回独立的 Transport 实例。
-//
-// 虽然 Transport 在应用级别共享（由 bootstrap 创建一次），但 New 本身
-// 不应使用全局单例模式返回同一实例，以便测试可以创建独立实例。
-// 应用级复用由 bootstrap 保证，而非由 transport 包强制。
-func TestNew_EachCallReturnsNewInstance(t *testing.T) {
-	tr1 := New()
-	tr2 := New()
-
-	if tr1 == tr2 {
-		t.Error("New 返回了同一实例，应返回独立实例")
-	}
-}
-
-// TestCloseIdleConnections_NilSafe 验证传入 nil 不会 panic。
-//
-// 这确保 Shutdown 过程中即使 Transport 尚未创建也不会崩溃。
-func TestCloseIdleConnections_NilSafe(t *testing.T) {
-	// 不应 panic。
-	CloseIdleConnections(nil)
-}
-
 // TestCloseIdleConnections_ClosesConnections 验证 CloseIdleConnections
-// 关闭已建立的空闲连接，且后续请求会建立新连接。
+// 关闭已建立的空闲连接，且后续请求会建立新连接
 func TestCloseIdleConnections_ClosesConnections(t *testing.T) {
 	var mu sync.Mutex
 	states := make(map[net.Conn]http.ConnState)

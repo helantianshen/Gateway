@@ -10,9 +10,9 @@ import (
 )
 
 // TestDiff_RandomRoutes 验证 Radix Tree 和参考 matcher 在随机生成的路由配置和
-// 请求路径上产生相同的匹配结果。固定随机种子确保可复现。
+// 请求路径上产生相同的匹配结果。固定随机种子确保可复现
 //
-// 测试分两阶段：
+// 测试分两阶段
 // 1. 仅路径匹配（固定 host="" 和 method="GET"，隔离 path 逻辑）
 // 2. 完整匹配（含 host、method、HEAD 回退）
 func TestDiff_RandomRoutes(t *testing.T) {
@@ -105,7 +105,7 @@ func TestDiff_RandomRoutes(t *testing.T) {
 	})
 }
 
-// TestDiff_InsertionOrderIndependence 验证同一组路由以不同顺序编译后匹配结果一致。
+// TestDiff_InsertionOrderIndependence 验证同一组路由以不同顺序编译后匹配结果一致
 func TestDiff_InsertionOrderIndependence(t *testing.T) {
 	rng := rand.New(rand.NewSource(999))
 	for iter := 0; iter < 100; iter++ {
@@ -150,7 +150,7 @@ func shuffleRoutes(rng *rand.Rand, routes []router.CompileInput) []router.Compil
 	return result
 }
 
-// generateRandomRoutesPathOnly 生成仅含路径的路由（host="", method="GET"）。
+// generateRandomRoutesPathOnly 生成仅含路径的路由（host="", method="GET"）
 func generateRandomRoutesPathOnly(rng *rand.Rand, count int) []router.CompileInput {
 	routes := make([]router.CompileInput, 0, count)
 	for i := 0; i < count; i++ {
@@ -166,7 +166,7 @@ func generateRandomRoutesPathOnly(rng *rand.Rand, count int) []router.CompileInp
 	return routes
 }
 
-// generateRandomRoutesFull 生成包含 host 和 method 的路由。
+// generateRandomRoutesFull 生成包含 host 和 method 的路由
 func generateRandomRoutesFull(rng *rand.Rand, count int) []router.CompileInput {
 	routes := make([]router.CompileInput, 0, count)
 	for i := 0; i < count; i++ {
@@ -207,13 +207,13 @@ func randomHost(rng *rand.Rand) string {
 	}
 }
 
-// randomRouteMethod 返回路由配置中的方法（含空表示任意 Method）。
+// randomRouteMethod 返回路由配置中的方法（含空表示任意 Method）
 func randomRouteMethod(rng *rand.Rand) string {
 	methods := []string{"", "GET", "POST", "HEAD"}
 	return methods[rng.Intn(len(methods))]
 }
 
-// randomRequestMethod 返回请求方法（不含空，真实 HTTP 请求总有方法）。
+// randomRequestMethod 返回请求方法（不含空，真实 HTTP 请求总有方法）
 func randomRequestMethod(rng *rand.Rand) string {
 	methods := []string{"GET", "POST", "HEAD"}
 	return methods[rng.Intn(len(methods))]

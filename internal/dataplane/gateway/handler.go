@@ -1,11 +1,4 @@
-// Package gateway 实现网关数据面的请求分发层。
-//
-// 职责：
-//   - 调用 router.ParsePath 执行路径安全检查（非法路径返回 400）；
-//   - 调用 router.Router.Match 执行路由匹配（无匹配返回 404）；
-//   - 在匹配后执行启动期预编译的 route policy chain；
-//   - 根据逻辑 UpstreamID 执行健康过滤和 Round Robin endpoint 选择；
-//   - 把请求委托给 endpoint 上预创建的固定目标 Proxy。
+// Package gateway 负责请求路由、上游选择和代理调用
 package gateway
 
 import (
@@ -22,7 +15,7 @@ import (
 	"github.com/helantianshen/gateway/internal/router"
 )
 
-// GatewayHandler 是网关数据面的入口 HTTP Handler。
+// GatewayHandler 是网关数据面的入口 HTTP Handler
 type GatewayHandler struct {
 	router        *router.Router
 	upstreams     map[string]*upstream.CompiledUpstream
@@ -32,25 +25,25 @@ type GatewayHandler struct {
 type routeMatchContextKey struct{}
 type upstreamSelectionContextKey struct{}
 
-// UpstreamSelection 是本次请求实际选中的逻辑 upstream 和物理 endpoint 身份。
+// UpstreamSelection 是本次请求实际选中的逻辑 upstream 和物理 endpoint 身份
 type UpstreamSelection struct {
 	UpstreamID string
 	EndpointID string
 }
 
-// MatchResultFromContext 返回 GatewayHandler 为当前请求选出的路由结果。
+// MatchResultFromContext 返回 GatewayHandler 为当前请求选出的路由结果
 func MatchResultFromContext(ctx context.Context) (*router.MatchResult, bool) {
 	result, ok := ctx.Value(routeMatchContextKey{}).(*router.MatchResult)
 	return result, ok
 }
 
-// UpstreamSelectionFromContext 返回 GatewayHandler 为当前请求实际选择的 endpoint。
+// UpstreamSelectionFromContext 返回 GatewayHandler 为当前请求实际选择的 endpoint
 func UpstreamSelectionFromContext(ctx context.Context) (UpstreamSelection, bool) {
 	selection, ok := ctx.Value(upstreamSelectionContextKey{}).(UpstreamSelection)
 	return selection, ok
 }
 
-// NewGatewayHandler 创建不带具体 route policy 的 Handler，供低层测试和简单装配使用。
+// NewGatewayHandler 创建不带具体 route policy 的 Handler，供低层测试和简单装配使用
 func NewGatewayHandler(r *router.Router, upstreams map[string]*upstream.CompiledUpstream) *GatewayHandler {
 	compiledUpstreams := make(map[string]*upstream.CompiledUpstream, len(upstreams))
 	for id, compiled := range upstreams {
@@ -63,8 +56,8 @@ func NewGatewayHandler(r *router.Router, upstreams map[string]*upstream.Compiled
 	}
 }
 
-// NewGatewayHandlerWithPolicies 在启动期为每个 route 编译不可变策略链。
-// Phase 5 传入空 middleware slice；后续 JWT/限流只需要向对应 route 注入实现。
+// NewGatewayHandlerWithPolicies 在启动期为每个 route 编译不可变策略链
+// 当前 route middleware 为空，CompiledChain 仍保持独立路由入口
 func NewGatewayHandlerWithPolicies(
 	r *router.Router,
 	upstreams map[string]*upstream.CompiledUpstream,
@@ -81,7 +74,7 @@ func NewGatewayHandlerWithPolicies(
 	return handler, nil
 }
 
-// ServeHTTP 执行安全路径解析、路由匹配和 route policy chain。
+// ServeHTTP 执行安全路径解析、路由匹配和 route policy chain
 func (h *GatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	segments, matchErr := router.ParsePath(r)
 	if matchErr != nil {
@@ -95,7 +88,7 @@ func (h *GatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 在 policy 前写入路由结果：策略和外层日志读取同一份编译期身份，不重新匹配 URL。
+	// 在 policy 前写入路由结果：策略和外层日志读取同一份编译期身份，不重新匹配 URL
 	ctx := context.WithValue(r.Context(), routeMatchContextKey{}, result)
 	r = r.WithContext(ctx)
 	if metadata, ok := requestctx.FromContext(ctx); ok {
@@ -109,8 +102,9 @@ func (h *GatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.forward(w, r)
 }
 
-// forward 在 route policy 通过后选择 endpoint 并执行固定目标 Proxy。
+// forward 在 route policy 通过后选择 endpoint 并执行固定目标 Proxy
 func (h *GatewayHandler) forward(w http.ResponseWriter, r *http.Request) {
+	// 路由阶段已把 MatchResult 放入 Context；缺失表示内部链路未正确装配
 	result, ok := MatchResultFromContext(r.Context())
 	if !ok || result == nil {
 		response.WriteError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "route context unavailable")
@@ -122,6 +116,7 @@ func (h *GatewayHandler) forward(w http.ResponseWriter, r *http.Request) {
 		response.WriteError(w, r, http.StatusBadGateway, "BAD_GATEWAY", "upstream 未配置")
 		return
 	}
+	// 每次请求只选一个健康 endpoint；无健康节点与运行时装配错误分别响应
 	endpoint, selectErr := compiledUpstream.Select()
 	if errors.Is(selectErr, upstream.ErrNoHealthyEndpoint) {
 		response.WriteError(w, r, http.StatusServiceUnavailable, "NO_HEALTHY_UPSTREAM", "upstream 暂无健康 endpoint")
@@ -132,6 +127,7 @@ func (h *GatewayHandler) forward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 选择结果供内层代理与外层观测共享，避免重新选择或从请求 URL 推断 endpoint
 	ctx := context.WithValue(r.Context(), upstreamSelectionContextKey{}, UpstreamSelection{
 		UpstreamID: result.UpstreamID,
 		EndpointID: endpoint.ID(),

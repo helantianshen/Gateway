@@ -8,15 +8,8 @@ import (
 	"strings"
 )
 
-// NormalizeHost 归一化请求 Host 头，用于路由匹配。
-//
-// 归一化顺序：
-//  1. 按 authority 语法安全拆分 hostname/port，兼容带括号和不带括号的 IPv6；
-//  2. 去除 hostname 的单个 trailing dot；
-//  3. 仅执行 ASCII lowercase。
-//
-// 请求侧采用保守的容错策略：authority、IP 或 DNS label 非法时返回空字符串，
-// 使其无法命中合法 exact/wildcard 配置；任意 Host 路由仍可接收它。
+// NormalizeHost 去除端口和单个尾点，并将 ASCII 字母转为小写
+// 非法 Host 返回空串；此时仍可能匹配任意 Host 路由
 func NormalizeHost(rawHost string) string {
 	if rawHost == "" {
 		return ""
@@ -35,12 +28,13 @@ func NormalizeHost(rawHost string) string {
 	return normalized
 }
 
-// ParseHostPattern 解析配置中的 host 字段。
+// ParseHostPattern 解析配置中的 host 字段
 //
 // 支持空 Host、exact Host 和前缀形式的单层 wildcard（*.example.com）。配置侧
 // 严格拒绝非 ASCII、非法端口、多个尾点、空 DNS label 及非前缀形式的 *，确保
-// 所有归一化在启动阶段完成，请求热路径只做确定性比较。
+// 所有归一化在启动阶段完成，请求热路径只做确定性比较
 func ParseHostPattern(raw string) (hostPattern, error) {
+	// 配置侧严格解析：空值是任意 Host，非空值必须能在启动时确定匹配类型
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return hostPattern{kind: hostAny}, nil
@@ -61,6 +55,7 @@ func ParseHostPattern(raw string) (hostPattern, error) {
 		return hostPattern{}, &hostParseError{input: raw, reason: "hostname 不能为空"}
 	}
 
+	// wildcard 仅允许最前面的 "*."，后缀必须是 DNS 名称而不能是 IP
 	if strings.HasPrefix(normalized, "*.") {
 		suffix := normalized[2:]
 		if suffix == "" {
@@ -78,6 +73,7 @@ func ParseHostPattern(raw string) (hostPattern, error) {
 		return hostPattern{kind: hostWildcard, value: suffix}, nil
 	}
 
+	// 非 wildcard 的模式可用合法 DNS 名称或 IP 地址精确匹配
 	if strings.Contains(normalized, "*") {
 		return hostPattern{}, &hostParseError{input: raw, reason: "非通配 host 不允许包含 *"}
 	}
@@ -89,12 +85,13 @@ func ParseHostPattern(raw string) (hostPattern, error) {
 	return hostPattern{kind: hostExact, value: normalized}, nil
 }
 
-// splitAuthorityHost 从配置或请求 authority 中提取 hostname，并验证显式端口。
-// IPv6 可使用 [::1]、[::1]:8080 或裸地址 ::1；带端口的 IPv6 必须使用括号。
+// splitAuthorityHost 从配置或请求 authority 中提取 hostname，并验证显式端口
+// IPv6 可使用 [::1]、[::1]:8080 或裸地址 ::1；带端口的 IPv6 必须使用括号
 func splitAuthorityHost(authority string) (string, error) {
 	if authority == "" {
 		return "", nil
 	}
+	// 带方括号的 IPv6 可以携带端口；端口部分始终单独校验
 	if strings.HasPrefix(authority, "[") {
 		end := strings.IndexByte(authority, ']')
 		if end < 0 {
@@ -117,6 +114,7 @@ func splitAuthorityHost(authority string) (string, error) {
 		return hostname, nil
 	}
 
+	// 一个冒号按 host:port 处理；多个冒号只接受不带端口的裸 IPv6
 	switch strings.Count(authority, ":") {
 	case 0:
 		return authority, nil
@@ -197,7 +195,7 @@ func isASCII(value string) bool {
 	return true
 }
 
-// MatchHost 检查归一化后的请求 host 是否匹配此 hostPattern。
+// MatchHost 检查归一化后的请求 host 是否匹配此 hostPattern
 func (p hostPattern) MatchHost(requestHost string) bool {
 	switch p.kind {
 	case hostAny:
@@ -215,17 +213,18 @@ func (p hostPattern) MatchHost(requestHost string) bool {
 	}
 }
 
-// hostParseError 表示 host 模式解析错误。
+// hostParseError 表示 host 模式解析错误
 type hostParseError struct {
 	input  string
 	reason string
 }
 
+// Error 返回包含原始 Host 和拒绝原因的配置错误
 func (e *hostParseError) Error() string {
 	return "host 模式解析失败 (" + e.input + "): " + e.reason
 }
 
-// Specificity 返回 host 模式的 specificity 值，用于编译排序与冲突判断。
+// Specificity 返回 host 模式的排序等级：exact 高于 wildcard，高于 any
 func (p hostPattern) Specificity() int {
 	switch p.kind {
 	case hostExact:

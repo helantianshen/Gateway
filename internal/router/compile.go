@@ -7,69 +7,59 @@ import (
 	"strings"
 )
 
-// CompileInput 是编译路由器的输入。
+// CompileInput 是编译路由器的输入
 type CompileInput struct {
-	// RouteID 是路由的唯一标识符。
+	// RouteID 是路由的唯一标识符
 	RouteID string
-	// Host 是路由的 Host 模式（空表示任意 Host）。
+	// Host 是路由的 Host 模式（空表示任意 Host）
 	Host string
-	// Method 是路由的 HTTP 方法（空表示任意 Method）。
+	// Method 是路由的 HTTP 方法（空表示任意 Method）
 	Method string
-	// Path 是路由的路径模式（支持 static/:param/*catchAll）。
+	// Path 是路由的路径模式（支持 static/:param/*catchAll）
 	Path string
-	// Upstream 是路由引用的 upstream ID。
+	// Upstream 是路由引用的 upstream ID
 	Upstream string
-	// Priority 是路由的优先级（仅在同 specificity 时参与比较）。
+	// Priority 是路由的优先级（仅在同 specificity 时参与比较）
 	Priority int
-	// PreserveHost 为 true 时保留客户端原始 Host 头。
+	// PreserveHost 为 true 时保留客户端原始 Host 头
 	PreserveHost bool
 }
 
-// Router 是编译后的不可变路由器。
+// Router 是编译后的不可变路由器
 //
-// 编译后的树完全不可变，可被并发安全读取。
+// 编译后的树完全不可变，可被并发安全读取
 type Router struct {
-	// hostGroups 已按 exact > wildcard > any 和模式值稳定排序。
+	// hostGroups 已按 exact > wildcard > any 和模式值稳定排序
 	hostGroups []*hostGroup
 }
 
-// hostGroup 将共享相同 host 模式的路由组织在一起。
+// hostGroup 将共享相同 host 模式的路由组织在一起
 type hostGroup struct {
 	pattern hostPattern
-	// methodTrees 是编译完成后不再修改的查询表，支持显式方法、HEAD 回退和 any。
+	// methodTrees 是编译完成后不再修改的查询表，支持显式方法、HEAD 回退和 any
 	methodTrees map[string]*methodTree
 }
 
-// hostGroupBuilder 只在 Compile 内聚合同一 Host 模式的解析路由。
+// hostGroupBuilder 只在 Compile 内聚合同一 Host 模式的解析路由
 type hostGroupBuilder struct {
 	pattern hostPattern
 	routes  []*parsedRoute
 }
 
-// methodTree 包含特定方法的 Radix Tree。
-// 空方法的树用于 "任意 Method" 匹配。
+// methodTree 包含特定方法的 Radix Tree
+// 空方法的树用于 "任意 Method" 匹配
 type methodTree struct {
 	root *node
 }
 
-// Compile 将路由列表编译为不可变 Radix Tree。
-//
-// 编译过程：
-//  1. 解析每条路由的 host/method/path 模式
-//  2. 按 host 分组
-//  3. 在每组内按 method 分组
-//  4. 在每个 method 组内构建 Radix Tree（含静态边压缩）
-//  5. 检测冲突（完整 specificity tuple 比较）
-//  6. 冻结节点
-//
-// 冲突条件：两条路由在同一 host+method 组内，path 匹配集合重叠，
-// 且完整 specificity tuple 相同，且 priority 相同。
+// Compile 将路由列表编译为可并发读取的压缩 Radix Tree
+// 同一 Host/Method 组内，路径结构和 priority 均相同的路由会被拒绝
 func Compile(routes []CompileInput) (*Router, error) {
 	if len(routes) == 0 {
 		return &Router{}, nil
 	}
 
-	// 解析所有路由，并在 Router 的独立入口保证 RouteID 全局唯一。
+	// 解析所有路由，并在 Router 的独立入口保证 RouteID 全局唯一
 	parsed := make([]*parsedRoute, 0, len(routes))
 	routeIDs := make(map[string]int, len(routes))
 	for i, r := range routes {
@@ -84,7 +74,8 @@ func Compile(routes []CompileInput) (*Router, error) {
 		parsed = append(parsed, pr)
 	}
 
-	// builder 负责聚合解析结果；最终 hostGroup 仅保留冻结树，不保留 parsedRoute。
+	// 先按 Host 再按 Method 分组；每个 Method 组独立检测冲突并冻结路由树
+	// 最终 hostGroup 不保留 builder 或 parsedRoute 指针
 	builders := groupByHost(parsed)
 	hostGroups := make([]*hostGroup, 0, len(builders))
 	for _, builder := range builders {
@@ -107,8 +98,8 @@ func Compile(routes []CompileInput) (*Router, error) {
 		hostGroups = append(hostGroups, group)
 	}
 
-	// Host specificity 是完整比较元组的第一层。相同 specificity 的模式集合互斥，
-	// 仍按 kind/value 排序以提供完全确定的冻结布局和可复现 benchmark。
+	// 匹配按 Host specificity 从高到低遍历；同等级按模式值固定顺序
+	// 排序发生在编译期，请求热路径无需复制或重新排序分组
 	sort.Slice(hostGroups, func(i, j int) bool {
 		a, b := hostGroups[i].pattern, hostGroups[j].pattern
 		if a.Specificity() != b.Specificity() {
@@ -123,13 +114,14 @@ func Compile(routes []CompileInput) (*Router, error) {
 	return &Router{hostGroups: hostGroups}, nil
 }
 
-// parsedRoute 是解析后的路由。
+// parsedRoute 是解析后的路由
 type parsedRoute struct {
 	route    *compiledRoute
 	segments []pathSegment
 }
 
 func parseRoute(r CompileInput, index int) (*parsedRoute, error) {
+	// 路由身份和 upstream 引用先做非空检查，模式分别由对应解析器规范化
 	if strings.TrimSpace(r.RouteID) == "" {
 		return nil, fmt.Errorf("路由 %d: ID 不能为空", index)
 	}
@@ -155,7 +147,7 @@ func parseRoute(r CompileInput, index int) (*parsedRoute, error) {
 		return nil, fmt.Errorf("路由 %q: %v", r.RouteID, err)
 	}
 
-	// 收集参数名
+	// 树节点只存路径结构；参数名保存在叶子路由，匹配后再绑定到捕获值
 	var paramNames []string
 	for _, seg := range segments {
 		if seg.segType == segParam || seg.segType == segCatchAll {
@@ -178,8 +170,8 @@ func parseRoute(r CompileInput, index int) (*parsedRoute, error) {
 	}, nil
 }
 
-// groupByHost 将路由按 host 模式分组。
-// 相同 host 模式的路由放在同一组。
+// groupByHost 将路由按 host 模式分组
+// 相同 host 模式的路由放在同一组
 func groupByHost(routes []*parsedRoute) []*hostGroupBuilder {
 	groups := make(map[string]*hostGroupBuilder)
 	var groupKeys []string
@@ -218,7 +210,7 @@ func hostGroupKey(p hostPattern) string {
 	}
 }
 
-// buildMethodTree 在同一 host+method 组内构建 Radix Tree。
+// buildMethodTree 在同一 host+method 组内构建 Radix Tree
 func buildMethodTree(routes []*parsedRoute) (*node, error) {
 	root := &buildNode{}
 
@@ -244,11 +236,10 @@ func buildMethodTree(routes []*parsedRoute) (*node, error) {
 	return freezeNode(root), nil
 }
 
-// detectConflicts 检测同一 host+method 组内的路由冲突。
+// detectConflicts 检测同一 host+method 组内的路由冲突
 //
-// 组内 Host 和 Method specificity 已相同；两个路径只有在结构模式等价、priority
-// 相同时才无法确定唯一胜者。使用规范化 key 做 O(n) 检测，避免 10k 路由启动时的
-// O(n²) 全量两两比较。param/catch-all 名称不进入 key，因此 /:id 与 /:name 冲突。
+// 结构相同且 priority 相等的路径无法确定唯一胜者
+// param/catch-all 名称不进入 key，因此 /:id 与 /:name 冲突
 func detectConflicts(routes []*parsedRoute) error {
 	seen := make(map[string]*parsedRoute, len(routes))
 	for _, route := range routes {
@@ -262,8 +253,8 @@ func detectConflicts(routes []*parsedRoute) error {
 	return nil
 }
 
-// conflictKey 编码完整的路径结构和 priority。static 值使用长度前缀避免分隔符碰撞；
-// param/catch-all 只编码类型，使参数名不影响匹配等价性。
+// conflictKey 编码完整的路径结构和 priority。static 值使用长度前缀避免分隔符碰撞
+// param/catch-all 只编码类型，使参数名不影响匹配等价性
 func conflictKey(route *parsedRoute) string {
 	var key strings.Builder
 	key.Grow(len(route.segments)*4 + 16)
@@ -281,7 +272,7 @@ func conflictKey(route *parsedRoute) string {
 	return key.String()
 }
 
-// insertRoute 将一条路由插入 Radix Tree。
+// insertRoute 将一条路由插入 Radix Tree
 func insertRoute(root *buildNode, pr *parsedRoute) {
 	current := root
 	for _, seg := range pr.segments {
@@ -295,7 +286,7 @@ func insertRoute(root *buildNode, pr *parsedRoute) {
 	})
 }
 
-// findOrCreateChild 查找或创建匹配该段的子节点。
+// findOrCreateChild 查找或创建匹配该段的子节点
 func findOrCreateChild(parent *buildNode, seg pathSegment) *buildNode {
 	for _, child := range parent.children {
 		if child.segType != seg.segType {
@@ -304,8 +295,8 @@ func findOrCreateChild(parent *buildNode, seg pathSegment) *buildNode {
 		if seg.segType == segStatic && child.prefix == seg.value {
 			return child
 		}
-		// 参数名不参与路径结构：/:id 与 /:name 必须共享同一个 param 分支，
-		// catch-all 同理。参数名保存在叶子的 compiledRoute 中，匹配成功后再绑定。
+		// 参数名不参与路径结构：/:id 与 /:name 必须共享同一个 param 分支
+		// catch-all 同理。参数名保存在叶子的 compiledRoute 中，匹配成功后再绑定
 		if seg.segType == segParam || seg.segType == segCatchAll {
 			return child
 		}
@@ -319,23 +310,23 @@ func findOrCreateChild(parent *buildNode, seg pathSegment) *buildNode {
 	return child
 }
 
-// compressStaticEdges 自底向上压缩连续的 static-only 子链。
+// compressStaticEdges 自底向上压缩连续的 static-only 子链
 // 当前节点不是根或路由终点、且只有一个 static 子节点时，可以吸收该子节点的
-// prefix、routes 和 children；子节点可以是叶子，从而把完整静态链压成一条边。
-// 压缩绝不跨越 param/catch-all 或已有路由终点。
+// prefix、routes 和 children；子节点可以是叶子，从而把完整静态链压成一条边
+// 压缩绝不跨越 param/catch-all 或已有路由终点
 func compressStaticEdges(n *buildNode) {
 	for _, child := range n.children {
 		compressStaticEdges(child)
 	}
 
-	// param/catch-all 节点不能吸收 static 子边。
+	// param/catch-all 节点不能吸收 static 子边
 	if n.segType != segStatic {
 		return
 	}
 
 	// 只在当前节点有一个 static 子节点且没有其他类型子节点时压缩
-	// 根节点只承担容器职责，不能吸收第一条边；已有路由终点也不能跨越压缩，
-	// 否则 `/a` 会被错误改写成 `/a/b` 的终点。
+	// 根节点只承担容器职责，不能吸收第一条边；已有路由终点也不能跨越压缩
+	// 否则 `/a` 会被错误改写成 `/a/b` 的终点
 	if n.prefix == "" || len(n.routes) > 0 {
 		return
 	}
@@ -348,7 +339,7 @@ func compressStaticEdges(n *buildNode) {
 	}
 
 	// n 自身不是路由终点，因此可以安全吸收唯一 static 子节点，包括子节点的
-	// routes 和 grandchildren，从而把完整 static-only 链压缩为一条边。
+	// routes 和 grandchildren，从而把完整 static-only 链压缩为一条边
 	n.prefix = n.prefix + "/" + child.prefix
 	n.routes = child.routes
 	n.children = child.children

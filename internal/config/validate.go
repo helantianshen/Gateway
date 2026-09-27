@@ -9,9 +9,8 @@ import (
 	"github.com/helantianshen/gateway/internal/router"
 )
 
-// validationProblems 聚合一份配置中的全部结构、语义和当前阶段约束错误。
-// 错误项只携带文件路径与稳定字段路径，不伪造 YAML 行号；行列定位仅属于 loader
-// 能够可靠提供的语法/schema 错误。聚合后一次返回可显著减少配置修复的启动轮次。
+// validationProblems 聚合结构和语义错误，只使用可确定的文件及字段路径
+// YAML 行列信息仅由 loader 对语法和 schema 错误提供
 type validationProblems struct {
 	file     string
 	problems []string
@@ -35,12 +34,14 @@ func (p *validationProblems) err() error {
 	return fmt.Errorf("配置校验失败:\n  %s", strings.Join(p.problems, "\n  "))
 }
 
-// Validate 对 ConfigSpec 执行结构校验、跨字段语义校验和当前运行约束校验。
+// Validate 对 ConfigSpec 执行结构校验、跨字段语义校验和当前运行约束校验
 //
-// URL 错误有意不包含用户填写的完整原始值，因为 URL 可能意外携带凭据或 token。
+// URL 错误有意不包含用户填写的完整原始值，因为 URL 可能意外携带凭据或 token
 // route/upstream ID 则属于配置中的非敏感标识符，可以在引用错误中安全回显，以帮助
-// 操作者定位拼写问题。
+// 操作者定位拼写问题
 func Validate(spec *ConfigSpec, file string) error {
+	// 尽量收集独立字段错误，让一次启动给出多个可定位的问题
+	// 路由编译仍只返回它遇到的首个语法或冲突错误
 	problems := &validationProblems{file: file}
 	if spec == nil {
 		problems.add("", "配置对象不能为空")
@@ -54,6 +55,8 @@ func Validate(spec *ConfigSpec, file string) error {
 	if len(spec.Upstreams) == 0 {
 		problems.add("upstreams", "至少需要配置一个 upstream")
 	}
+	// 先建立 upstream ID 索引，再遍历路由时检查引用是否存在
+	// endpoint ID 的唯一性只在所属 upstream 内校验
 	upstreamIndexes := make(map[string]int, len(spec.Upstreams))
 	for upstreamIndex, upstream := range spec.Upstreams {
 		upstreamPath := fmt.Sprintf("upstreams[%d]", upstreamIndex)
@@ -93,6 +96,8 @@ func Validate(spec *ConfigSpec, file string) error {
 	if len(spec.Routes) == 0 {
 		problems.add("routes", "至少需要配置一条 route")
 	}
+	// 路由的基础字段与逻辑 upstream 引用先在配置层检查
+	// Host、Method、Path 的语法和路由冲突由下面的 Router 编译器检查
 	routeIDs := make(map[string]int, len(spec.Routes))
 	for routeIndex, route := range spec.Routes {
 		routePath := fmt.Sprintf("routes[%d]", routeIndex)
@@ -114,7 +119,7 @@ func Validate(spec *ConfigSpec, file string) error {
 	}
 
 	// Router 是路由语法和歧义规则的唯一实现。Validate 调用同一个编译入口，确保
-	// 非法 Host/Method/Path 和路由冲突在配置管线中、创建 Transport/listener 前被拒绝。
+	// 非法 Host/Method/Path 和路由冲突在配置管线中、创建 Transport/listener 前被拒绝
 	validateRouterConfiguration(problems, spec.Routes)
 
 	if strings.TrimSpace(spec.Policies.RequestTimeout) == "" {
@@ -151,9 +156,9 @@ func validateEndpointURL(problems *validationProblems, field, rawURL string) {
 	}
 }
 
-// validateRouterConfiguration 使用生产 Router 编译器校验完整路由集合。
+// validateRouterConfiguration 使用生产 Router 编译器校验完整路由集合
 // 这里不保留编译结果；Application 在装配时会再次编译并持有冻结树。启动阶段的少量
-// 重复工作换取了 Config.Validate 作为公开入口时也无法绕过路由语法与冲突检查。
+// 重复工作换取了 Config.Validate 作为公开入口时也无法绕过路由语法与冲突检查
 func validateRouterConfiguration(problems *validationProblems, routes []RouteSpec) {
 	inputs := make([]router.CompileInput, 0, len(routes))
 	for _, route := range routes {

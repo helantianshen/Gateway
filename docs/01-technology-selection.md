@@ -2,7 +2,9 @@
 
 > 状态：已确定；Phase 0–5 审查后更新运行时与已落地依赖
 > 调研日期：2026-07-12；最近审查：2026-07-16
-> 当前环境：`go version go1.26.5 linux/amd64`
+> 历史审查环境：`go version go1.26.5 linux/amd64`
+
+> 2026-09-27 状态说明：本文件包含后续阶段的候选选型，不是当前依赖清单；版本建议未在本次重新联网调研。当前实现见 [AI 架构导航](../.agent/PROJECT.md)，实际依赖见本文第 7 节和 go.mod。
 
 ## 1. 选型目标
 
@@ -197,27 +199,18 @@ Phase 0–5 安全审查已把 Go 升级到 1.26.5，原先阻止 etcd v3.7.0 �
 | Web 管理后台 | 暂不 | 管理 API 和 OpenAPI 更能体现后端能力，前端会稀释主线 |
 | WASM/动态插件系统 | 暂不 | 生命周期、安全和 ABI 复杂度过高，v1 不需要 |
 
-## 7. 初始化时建议写入的 Go 依赖
+## 7. 当前已落地的直接 Go 依赖
 
-以下仅作为初始化清单，实际命令执行前仍应确认模块可用：
+以下与本次审查基线的 go.mod 一致，不是推荐升级清单：
 
-```text
-github.com/gin-gonic/gin@v1.12.0
-go.etcd.io/etcd/client/v3@v3.6.13
-github.com/redis/go-redis/v9@v9.21.0
-go.uber.org/zap@v1.28.0
-github.com/prometheus/client_golang@v1.23.2
-go.opentelemetry.io/otel@v1.44.0
-go.opentelemetry.io/otel/sdk@v1.44.0
-go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc@v1.44.0
-go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp@v0.69.0
-go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin@v0.69.0
-go.yaml.in/yaml/v3@v3.0.4
-github.com/golang-jwt/jwt/v5@v5.3.1
-golang.org/x/time@v0.15.0
-```
+| 模块 | 版本 | 使用位置 |
+|---|---|---|
+| `gopkg.in/yaml.v3` | `v3.0.1` | config 严格 YAML 解码 |
+| `github.com/felixge/httpsnoop` | `v1.1.0` | middleware 响应写入观测与接口透传 |
+| `go.uber.org/zap` | `v1.28.0` | observability 与 middleware 日志 |
+| `github.com/prometheus/client_golang` | `v1.23.2` | observability Registry、Collector 和 HTTP exposition |
 
-不建议一次性安装所有依赖。应在对应开发阶段引入，确保每个依赖都有明确调用点和测试。
+其余间接依赖见 go.mod/go.sum。Gin、etcd、Redis、JWT、OTel SDK、x/time 以及第三方路由基准库当前均未引入；应在相应阶段重新核实版本、集成测试及必要性。当前 YAML 直接依赖不是 `go.yaml.in/yaml/v3`。
 
 ## 8. 参考资料
 

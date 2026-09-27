@@ -4,6 +4,15 @@
 
 > 当前版本：**Phase 5** — 中间件、结构化日志与 Prometheus
 
+## 文档导航与当前边界
+
+- [当前实现与 AI 开发导航](.agent/PROJECT.md)：模块依赖、请求链路、状态所有权和修改入口。
+- [当前代码审查](docs/10-current-architecture-review.md)：五项已复现且尚未修复的缺陷、测试不足和验证边界。
+- [目标架构](docs/02-architecture-design.md)与[阶段路线](docs/03-development-roadmap.md)：包含未来规划，不代表全部已实现。
+- [贡献指南](CONTRIBUTING.md)：开发环境与检查命令。
+
+当前配置只在启动时加载，修改后需要重启。没有控制面、热更新、实际限流、主动健康检查或应用级重试。admin 默认 `:9090` 监听全部接口且无认证，应限制其网络可达范围；`/readyz` 只表示运维 Handler 可服务，不验证上游健康。入口 Server 当前提供明文 HTTP。
+
 ## 架构
 
 ```text
@@ -28,7 +37,7 @@ admin Server (:9090)
 
 ## 快速开始
 
-需要 Go `1.26.5` 或更高兼容 patch 版本。默认配置包含三个 mock endpoint，需要分别启动三个进程：
+模块要求 Go `1.26.5`，CI 固定使用该版本（没有 `toolchain` 指令）。默认配置包含三个 mock endpoint，需要分别启动三个进程：
 
 ```bash
 # 终端 1 / 2 / 3
@@ -144,7 +153,9 @@ policies:
 - 每个 upstream 至少包含一个 endpoint；
 - `weight` 必须为正整数，省略时默认取 `100`；Phase 4 普通 RR 不读取权重，SWRR 属于扩展阶段；
 - `request_timeout` 必须是正数 Go duration；
-- `rate` 和 `burst` 必须为非负整数。
+- `rate` 和 `burst` 必须为非负整数；当前只解析和校验，没有实际限流效果。
+
+已知边界：YAML merge 中的显式 weight 可能被默认值覆盖；`request_timeout` 从进入 Proxy 开始计时，目前不能保证中断停滞的客户端上传。详见当前代码审查 R1/R5。
 
 路由配置还经过 `router.Compile` 的语法校验和冲突检测：
 
@@ -171,6 +182,9 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 
 ```text
 .
+├── .agent/
+│   ├── PROJECT.md          # 当前实现与 AI 开发导航
+│   └── tasks/              # 本次审查状态与复现证据
 ├── cmd/
 │   ├── gateway/            # 网关进程入口
 │   └── mock-service/       # 本地演示 upstream
@@ -216,7 +230,9 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 │   ├── 05-phase-2-implementation-plan.md
 │   ├── 06-phase-3-implementation-plan.md
 │   ├── 07-phase-4-implementation-plan.md
-│   └── 08-phase-5-implementation-plan.md
+│   ├── 08-phase-5-implementation-plan.md
+│   ├── 09-phase-0-5-retrospective-audit.md
+│   └── 10-current-architecture-review.md
 ├── .github/workflows/ci.yml
 ├── Makefile                # verify / audit / benchmark / fuzz / run
 ├── go.mod
@@ -257,13 +273,13 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 
 实际链路为 `Request ID → Trace 占位 → Observe → Recovery → Guard → GatewayHandler`。Observe 位于 Recovery 外侧，因此 panic 转成 500 后能记录正确最终状态；`http.ErrAbortHandler` 和响应开始后的 panic 只中断连接，不二次改写响应。
 
-`X-Request-ID` 只接受长度 1–128 的 `[A-Za-z0-9._-]`；缺失或非法时生成 32 位小写十六进制 ID。该 ID 同时进入响应 Header、网关错误 JSON、access log 和 upstream 请求 Header。
+`X-Request-ID` 只接受长度 1–128 的 `[A-Za-z0-9._-]`；缺失或非法时生成 32 位小写十六进制 ID。该 ID 的设计契约是进入响应 Header、网关错误 JSON、access log 和 upstream 请求 Header；当前 1xx 响应和 Connection token 场景存在缺口，见审查 R3/R4。
 
-Guard 限制请求头总大小 1 MiB、最多 100 个 Header 字段、请求体最大 64 MiB。未知长度 body 仍为流式读取，超限返回 413，不缓存完整 body。
+Server 限制请求头大小 1 MiB；Guard 按不同 Header 名称计数，最多 100 个（不计注入的 Request ID），请求体最大 64 MiB。未知长度 body 仍为流式读取，超限返回 413，不缓存完整 body。
 
 ### 结构化日志与 Prometheus
 
-production access log 使用 zap JSON，每请求最多一条 `request completed`，包含 request/trace/route/upstream/endpoint、status、duration、attempts 和字节数。日志不读取 Authorization、Cookie、JWT、query value、原始 path 或 body。
+production access log 使用 zap JSON，每请求最多一条 `request completed`，包含 request/trace/route/upstream/endpoint、status、duration、attempts 和字节数。该 access log 不读取 Authorization、Cookie、JWT、query value、原始 path 或 body。ReverseProxy 另有默认标准日志出口，异常 Trailer 可记录上游原文，见审查 R2。
 
 每个 Application 使用独立 Prometheus Registry。核心指标包括请求量、耗时、并发、拒绝、route、upstream、endpoint health/active 和静态 config version。Method 非标准值聚合为 `_OTHER`；route 数超过 1,000 时 `route_id/path_template` 聚合为 `_other`，原始 URL、request ID、用户 ID、IP 和错误文本永不作为 label。
 
@@ -292,7 +308,9 @@ Router 只返回逻辑 `UpstreamID`；`CompiledUpstream` 再用私有 Round Robi
 | 客户端取消 | 内部记为 499 | 不向已断开的客户端写新响应 |
 | 响应头已写出后中断 | 原状态码 | 不二次改写，客户端收到部分响应 |
 
-所有由 Gateway 产生的 JSON 错误均包含 `code`、`message` 和 `request_id`。
+上表状态描述最终响应尚未写出时的应用层行为；1xx 的状态记录缺陷见审查 R3。net/http 在进入中间件前拒绝的请求不保证统一 JSON 或 Request ID。
+
+所有由应用错误辅助函数产生的 JSON 错误均包含 `code`、`message` 和 `request_id`。
 
 ### 优雅停机
 

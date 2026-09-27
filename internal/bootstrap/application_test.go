@@ -25,9 +25,9 @@ import (
 
 const testOperationTimeout = 5 * time.Second
 
-// testConfig 创建用于 bootstrap 测试的最小 Config。
+// testConfig 创建用于 bootstrap 测试的最小 Config
 // TCP 端口 0 不会有监听服务，public 代理会确定性返回 502；这既验证
-// public HTTP Server 可访问，也避免为一般生命周期测试额外创建 upstream。
+// public HTTP Server 可访问，也避免为一般生命周期测试额外创建 upstream
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 	u, err := url.Parse("http://127.0.0.1:0")
@@ -70,12 +70,12 @@ func testConfig(t *testing.T) *config.Config {
 	}
 }
 
-// newUnixListenFunc 返回一个按调用顺序创建 public/admin Unix domain listener 的工厂。
+// newUnixListenFunc 返回一个按调用顺序创建 public/admin Unix domain listener 的工厂
 //
-// newWithListen 仍以 network="tcp" 和配置地址调用工厂，以完整验证生产装配契约；
+// newWithListen 仍以 network="tcp" 和配置地址调用工厂，以完整验证生产装配契约
 // 测试工厂只替换底层传输为 Unix socket。socket 位于 t.TempDir 中，不消耗 TCP 临时
 // 端口，也不会产生 TIME_WAIT。每个 listener 同时注册兜底清理，测试正常完成时
-// Application.Shutdown 会先关闭它们，兜底 Close 的重复调用结果可安全忽略。
+// Application.Shutdown 会先关闭它们，兜底 Close 的重复调用结果可安全忽略
 func newUnixListenFunc(t *testing.T) listenFunc {
 	t.Helper()
 
@@ -106,10 +106,10 @@ func newUnixListenFunc(t *testing.T) listenFunc {
 	}
 }
 
-// newUnixHTTPClient 创建只连接指定 Unix socket 的 HTTP Client。
-// URL 中的 host 只是满足 net/http 的请求格式，DialContext 会忽略传入的 TCP 地址，
+// newUnixHTTPClient 创建只连接指定 Unix socket 的 HTTP Client
+// URL 中的 host 只是满足 net/http 的请求格式，DialContext 会忽略传入的 TCP 地址
 // 使用 Context 感知的 Unix domain dial；这样仍经过真实 HTTP Transport、Serve 和连接
-// 关闭流程，但不会占用本机 TCP 临时端口。
+// 关闭流程，但不会占用本机 TCP 临时端口
 func newUnixHTTPClient(t *testing.T, socketPath string) *http.Client {
 	t.Helper()
 
@@ -127,8 +127,8 @@ func newUnixHTTPClient(t *testing.T, socketPath string) *http.Client {
 	}
 }
 
-// getAndRead 完成请求并读取完整响应体。读取到 EOF 后 Transport 才能复用连接；
-// 这同时确保响应体错误不会被状态码断言掩盖。
+// getAndRead 完成请求并读取完整响应体。读取到 EOF 后 Transport 才能复用连接
+// 这同时确保响应体错误不会被状态码断言掩盖
 func getAndRead(t *testing.T, client *http.Client, requestURL string) (int, string) {
 	t.Helper()
 
@@ -150,7 +150,7 @@ func getAndRead(t *testing.T, client *http.Client, requestURL string) (int, stri
 }
 
 // waitForRun 等待 Application.Run 退出，统一验证 Context 取消确实触发了
-// Graceful Shutdown，且生命周期不会无限阻塞。
+// Graceful Shutdown，且生命周期不会无限阻塞
 func waitForRun(t *testing.T, errCh <-chan error) {
 	t.Helper()
 
@@ -164,8 +164,8 @@ func waitForRun(t *testing.T, errCh <-chan error) {
 	}
 }
 
-// assertListenerClosed 直接在原 listener 上调用 Accept 验证它已经关闭。
-// 该断言适用于 TCP 和 Unix listener，且不会创建额外连接来间接推断关闭状态。
+// assertListenerClosed 直接在原 listener 上调用 Accept 验证它已经关闭
+// 该断言适用于 TCP 和 Unix listener，且不会创建额外连接来间接推断关闭状态
 func assertListenerClosed(t *testing.T, name string, listener net.Listener) {
 	t.Helper()
 
@@ -182,10 +182,10 @@ func assertListenerClosed(t *testing.T, name string, listener net.Listener) {
 	}
 }
 
-// TestApplication_LifecycleAndEndpoints 使用单个 Application 生命周期验证完整成功路径：
+// TestApplication_LifecycleAndEndpoints 使用单个 Application 生命周期验证完整成功路径
 // public/admin Server 经真实 HTTP 可访问、Context 取消触发 Graceful Shutdown，且 Run
 // 返回前两个底层 listener 均已关闭。成功代理链已由 proxy 包覆盖；此处连接 TCP
-// 端口 0 确定性返回 502，避免 bootstrap 再创建 TCP upstream。
+// 端口 0 确定性返回 502，避免 bootstrap 再创建 TCP upstream
 func TestApplication_LifecycleAndEndpoints(t *testing.T) {
 	app, err := newWithListen(testConfig(t), newUnixListenFunc(t))
 	if err != nil {
@@ -202,7 +202,7 @@ func TestApplication_LifecycleAndEndpoints(t *testing.T) {
 	}()
 
 	// listener 已在 newWithListen 中同步创建。即使 Serve goroutine 尚未调度，Unix
-	// 连接也会进入 listener backlog，随后由 Serve 接收，因此无需 readiness 轮询。
+	// 连接也会进入 listener backlog，随后由 Serve 接收，因此无需 readiness 轮询
 	adminClient := newUnixHTTPClient(t, app.AdminAddr().String())
 	for _, tc := range []struct {
 		path       string
@@ -322,8 +322,8 @@ func TestApplication_ObservabilityEndpoints(t *testing.T) {
 }
 
 // TestApplication_AlreadyCancelledContext 验证传入已取消的 Context 时，Run 仍会
-// 对 public/admin Server 执行 Graceful Shutdown 并及时关闭两个 Unix listener。
-// 此路径不建立 HTTP 连接，同时验证取消先于 Serve 调度也不会遗留监听资源。
+// 对 public/admin Server 执行 Graceful Shutdown 并及时关闭两个 Unix listener
+// 此路径不建立 HTTP 连接，同时验证取消先于 Serve 调度也不会遗留监听资源
 func TestApplication_AlreadyCancelledContext(t *testing.T) {
 	app, err := newWithListen(testConfig(t), newUnixListenFunc(t))
 	if err != nil {
@@ -347,7 +347,7 @@ func TestApplication_AlreadyCancelledContext(t *testing.T) {
 // Application.shutdown 会关闭共享 http.Transport 的空闲连接。测试记录同一个 upstream
 // net.Conn 先进入 StateIdle、再进入 StateClosed；只有 Shutdown 中的
 // CloseIdleConnections 才会在 upstream Server 仍然运行时触发后一个状态，避免测试在
-// 清理阶段调用 Server.Close 后因连接被动关闭而误通过。
+// 清理阶段调用 Server.Close 后因连接被动关闭而误通过
 func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	upstreamDir := t.TempDir()
 	upstreamPath := filepath.Join(upstreamDir, "upstream.sock")
@@ -367,7 +367,7 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 		}),
 		ConnState: func(conn net.Conn, state http.ConnState) {
 			// ConnState 回调在 HTTP Server 的连接状态机中同步执行；将连接指针
-			// 一并记录，后续才能证明 idle 与 closed 属于同一条物理连接。
+			// 一并记录，后续才能证明 idle 与 closed 属于同一条物理连接
 			select {
 			case stateEvents <- connStateEvent{conn: conn, state: state}:
 			default:
@@ -381,7 +381,7 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	}()
 
 	// 失败路径仍关闭 upstream 资源；成功路径会在 idle->closed 断言之后显式执行
-	// 同样的关闭和等待，确保测试结束时没有遗留 Serve goroutine 或文件描述符。
+	// 同样的关闭和等待，确保测试结束时没有遗留 Serve goroutine 或文件描述符
 	upstreamClosed := false
 	t.Cleanup(func() {
 		if !upstreamClosed {
@@ -407,7 +407,7 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 		t.Fatalf("newWithListen 失败: %v", err)
 	}
 	// newWithListen 创建的 Proxy 已绑定 app.transport；仅替换 DialContext，使
-	// 合法的 upstream.local URL 通过 Unix socket 连接真实 Server，不接触 TCP。
+	// 合法的 upstream.local URL 通过 Unix socket 连接真实 Server，不接触 TCP
 	app.transport.Proxy = nil
 	dialer := &net.Dialer{}
 	app.transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -435,7 +435,7 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	case event := <-stateEvents:
 		if event.state != http.StateIdle {
 			// 连接状态事件可能包含新连接和 active 状态，继续从统一循环中
-			// 筛选目标状态；该分支仅用于保持 select 超时边界明确。
+			// 筛选目标状态；该分支仅用于保持 select 超时边界明确
 			for idleConn == nil {
 				select {
 				case next := <-stateEvents:
@@ -470,8 +470,8 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 		}
 	}
 
-	// 只有在已经观察到 shutdown 导致的连接关闭后，才关闭 upstream Server；
-	// 因而 Server.Close 不可能伪造本测试要求的 idle->closed 证据。
+	// 只有在已经观察到 shutdown 导致的连接关闭后，才关闭 upstream Server
+	// 因而 Server.Close 不可能伪造本测试要求的 idle->closed 证据
 	if err := upstreamServer.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		t.Fatalf("关闭 upstream Server 失败: %v", err)
 	}
@@ -489,9 +489,9 @@ func TestApplication_ShutdownClosesUpstreamIdleConnection(t *testing.T) {
 	upstreamClosed = true
 }
 
-// trackingListener 是只用于装配失败路径的 fake listener。
-// 测试不会启动 Serve，因此 Accept 若被调用就返回明确错误；Close 记录调用次数，
-// 用于直接证明 admin 创建失败时已创建的 public listener 被准确关闭一次。
+// trackingListener 是只用于装配失败路径的 fake listener
+// 测试不会启动 Serve，因此 Accept 若被调用就返回明确错误；Close 记录调用次数
+// 用于直接证明 admin 创建失败时已创建的 public listener 被准确关闭一次
 type trackingListener struct {
 	closeCalls int
 }
@@ -509,9 +509,7 @@ func (l *trackingListener) Addr() net.Addr {
 	return &net.UnixAddr{Name: "fake-public.sock", Net: "unix"}
 }
 
-// TestApplication_New_NilDependencies 验证无效依赖在创建 Transport 前被明确拒绝。
-// listener factory 是装配流程的必需依赖；这里的测试重点是返回可分类错误而非
-// 因 nil 函数调用 panic。nil 配置也在同一入口拒绝，保持生产接口签名不变。
+// TestApplication_New_NilDependencies 验证无效依赖在分配资源前返回错误
 func TestApplication_New_NilDependencies(t *testing.T) {
 	if _, err := newWithListen(testConfig(t), nil); err == nil {
 		t.Fatal("nil listener factory 未返回错误")
@@ -564,8 +562,8 @@ func TestApplication_New_NilDependencies(t *testing.T) {
 	}
 }
 
-// signalListener 是可控的 admin listener：测试发出信号后 Accept 返回 sentinel，
-// 从而让 admin Serve 确定性地结束，同时 Close 仍能解除 Shutdown 期间的阻塞。
+// signalListener 是可控的 admin listener：测试发出信号后 Accept 返回 sentinel
+// 从而让 admin Serve 确定性地结束，同时 Close 仍能解除 Shutdown 期间的阻塞
 type signalListener struct {
 	signal     chan struct{}
 	closed     chan struct{}
@@ -606,7 +604,7 @@ func (l *signalListener) Addr() net.Addr {
 var errInjectedServe = errors.New("测试注入的 Serve 错误")
 
 // watchedListener 在真实 Unix listener 外包一层退出通知，用于等待 public Serve
-// 在请求释放、底层 listener 关闭后彻底退出，避免测试只验证 Run 返回而遗留 goroutine。
+// 在请求释放、底层 listener 关闭后彻底退出，避免测试只验证 Run 返回而遗留 goroutine
 type watchedListener struct {
 	net.Listener
 	serveDone chan struct{}
@@ -621,10 +619,8 @@ func (l *watchedListener) Accept() (net.Conn, error) {
 	return conn, err
 }
 
-// TestApplication_Run_JoinsServeAndShutdownErrors 使用真实 Unix public listener、
-// 阻塞的活跃 HTTP 连接和可控 admin listener，确定性验证 Run 同时保留 Serve 错误
-// 与 Graceful Shutdown 超时错误。这里不能只调用 errors.Join：必须经过 net/http 的
-// Serve、Shutdown 和活跃连接状态机，才能证明真实生命周期下的错误合并契约。
+// TestApplication_Run_JoinsServeAndShutdownErrors 验证并发 Serve 和 Shutdown 错误均被返回
+// 真实 Unix 连接使活跃请求参与 net/http 的停机状态机
 func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 	dir := t.TempDir()
 	publicPath := filepath.Join(dir, "public.sock")
@@ -687,7 +683,7 @@ func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 		t.Errorf("Run 错误 = %v，不包含 Shutdown 超时错误", runErr)
 	}
 
-	// Shutdown 超时后必须强制关闭连接并取消活跃请求 Context。
+	// Shutdown 超时后必须强制关闭连接并取消活跃请求 Context
 	if err := conn.SetReadDeadline(time.Now().Add(testOperationTimeout)); err != nil {
 		t.Fatalf("设置连接读取 deadline: %v", err)
 	}
@@ -713,9 +709,7 @@ func TestApplication_Run_JoinsServeAndShutdownErrors(t *testing.T) {
 	}
 }
 
-// TestApplication_New_ListenFailure 使用完全可控的 listener factory 验证 public/admin
-// 创建错误和 public 清理路径。测试不再预占、释放或重绑定 TCP 地址，因此不存在地址
-// 在检查与使用之间被其他进程抢占的 TOCTOU，也不消耗任何临时端口。
+// TestApplication_New_ListenFailure 用可控 listener 验证 bind 错误与 public 清理路径
 func TestApplication_New_ListenFailure(t *testing.T) {
 	listenErr := errors.New("测试 listener 创建失败")
 
@@ -782,11 +776,7 @@ func TestApplication_New_ListenFailure(t *testing.T) {
 	})
 }
 
-// TestApplication_InvalidConfigDoesNotCreateListeners 验证非法配置不会创建任何
-// listener。生产代码中 config.Load() 在 bootstrap.New() 之前执行；如果 Load 返回
-// 错误，main.go 调用 log.Fatal 退出，永远不会到达 New。本测试通过注入一个追踪
-// listener factory 直接证明：即使绕过 main.go 的顺序保护，nil 配置也无法触发任何
-// listener 创建。
+// TestApplication_InvalidConfigDoesNotCreateListeners 验证非法配置不会触发 bind
 func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
 	var factoryCalls int
 	listen := func(network, address string) (net.Listener, error) {
@@ -794,7 +784,7 @@ func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
 		return nil, errors.New("不应到达此处")
 	}
 
-	// nil 配置必须在创建 Transport 或 listener 前返回错误。
+	// nil 配置必须在创建 Transport 或 listener 前返回错误
 	_, err := newWithListen(nil, listen)
 	if err == nil {
 		t.Fatal("nil 配置未返回错误")
@@ -803,7 +793,7 @@ func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
 		t.Errorf("nil 配置触发了 %d 次 listener factory 调用, want 0", factoryCalls)
 	}
 
-	// nil listener factory 也必须在分配任何资源前返回错误。
+	// nil listener factory 也必须在分配任何资源前返回错误
 	_, err = newWithListen(testConfig(t), nil)
 	if err == nil {
 		t.Fatal("nil listener factory 未返回错误")
@@ -813,13 +803,10 @@ func TestApplication_InvalidConfigDoesNotCreateListeners(t *testing.T) {
 	}
 }
 
-// TestApplication_ValidYAMLConfigDrivesProxy 验证完整静态配置链路：
-// Config → Router → GatewayHandler → ReverseProxy → upstream，固定此前阶段的代理契约。
-//
-// 测试使用 Unix socket 作为 upstream，避免占用 TCP 临时端口；通过自定义 Transport
-// DialContext 将 YAML 中配置的 upstream URL 重定向到 Unix socket。
+// TestApplication_ValidYAMLConfigDrivesProxy 验证 YAML 到代理调用的完整静态链路
+// 测试用 Unix socket 和自定义 DialContext 保持 HTTP 协议路径，同时避免 TCP 端口竞争
 func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
-	// 创建 Unix socket upstream server，返回确定性响应体。
+	// 创建 Unix socket upstream server，返回确定性响应体
 	upstreamDir := t.TempDir()
 	upstreamPath := filepath.Join(upstreamDir, "upstream.sock")
 	upstreamListener, err := net.Listen("unix", upstreamPath)
@@ -839,7 +826,7 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 		<-upstreamServeDone
 	})
 
-	// 使用 Unix listener 作为 public 和 admin 监听器，避免 TCP 临时端口。
+	// 使用 Unix listener 作为 public 和 admin 监听器，避免 TCP 临时端口
 	dir := t.TempDir()
 	publicPath := filepath.Join(dir, "public.sock")
 	adminPath := filepath.Join(dir, "admin.sock")
@@ -858,7 +845,7 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 
 	var callCount int
 	listen := func(network, address string) (net.Listener, error) {
-		// newWithListen 按 public 后 admin 的顺序调用 factory；用计数器确保每次返回不同的 listener。
+		// newWithListen 按 public 后 admin 的顺序调用 factory；用计数器确保每次返回不同的 listener
 		callCount++
 		switch callCount {
 		case 1:
@@ -870,8 +857,8 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 		}
 	}
 
-	// 构造一个合法的 Phase 4 Config，upstream target 指向 Unix socket 不可直达的地址；
-	// 通过覆盖共享 Transport DialContext 将其重定向到 Unix socket。
+	// 配置使用合法的 TCP URL，由测试 Transport 重定向到 Unix socket
+	// 通过覆盖共享 Transport DialContext 将其重定向到 Unix socket
 	upstreamURL, err := url.Parse("http://upstream.local")
 	if err != nil {
 		t.Fatalf("解析 upstream URL 失败: %v", err)
@@ -914,7 +901,7 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newWithListen 失败: %v", err)
 	}
-	// 覆盖 Transport 的 DialContext，使 upstream.local 重定向到 Unix socket。
+	// 覆盖 Transport 的 DialContext，使 upstream.local 重定向到 Unix socket
 	app.transport.Proxy = nil
 	dialer := &net.Dialer{}
 	app.transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -926,7 +913,7 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 	runDone := make(chan error, 1)
 	go func() { runDone <- app.Run(ctx) }()
 
-	// 通过 Unix socket 向 public Server 发送请求。
+	// 通过 Unix socket 向 public Server 发送请求
 	publicClient := newUnixHTTPClient(t, app.PublicAddr().String())
 	status, body := getAndRead(t, publicClient, "http://public.local/test")
 	if status != http.StatusOK {
@@ -936,7 +923,7 @@ func TestApplication_ValidYAMLConfigDrivesProxy(t *testing.T) {
 		t.Fatalf("public 响应体 = %q, want %q", body, wantBody)
 	}
 
-	// 验证 admin 健康端点也可达。
+	// 验证 admin 健康端点也可达
 	adminClient := newUnixHTTPClient(t, app.AdminAddr().String())
 	adminStatus, _ := getAndRead(t, adminClient, "http://admin.local/livez")
 	if adminStatus != http.StatusOK {
@@ -1012,7 +999,7 @@ func TestApplication_MultipleEndpointsRoundRobinAndProxyModes(t *testing.T) {
 		}
 	}
 
-	// cursor 在四次请求后回到 endpoint A；该路由必须使用创建期预编译的 preserveHost Proxy。
+	// cursor 在四次请求后回到 endpoint A；该路由必须使用创建期预编译的 preserveHost Proxy
 	status, body := getAndRead(t, client, "http://public.local/preserve")
 	if status != http.StatusOK || body != "a|public.local" {
 		t.Fatalf("preserveHost 请求 = (%d, %q), want (200, %q)", status, body, "a|public.local")

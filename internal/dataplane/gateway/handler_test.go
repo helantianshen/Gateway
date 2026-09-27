@@ -79,7 +79,7 @@ func TestGatewayHandlerRoutesToEndpointAndPropagatesContext(t *testing.T) {
 		"default": mustCompileUpstream(t, "default", []string{"http://default.internal"}, upstream.ProxyModeDefault|upstream.ProxyModePreserveHost, rt),
 	})
 
-	// HEAD 没有显式路由，必须回退到 GET；向 endpoint 转发时仍保持 HEAD。
+	// HEAD 没有显式路由，必须回退到 GET；向 endpoint 转发时仍保持 HEAD
 	req := httptest.NewRequest(http.MethodHead, "http://gateway.local/users/42", nil)
 	req.Host = "api.example.com:8443"
 	rec := httptest.NewRecorder()

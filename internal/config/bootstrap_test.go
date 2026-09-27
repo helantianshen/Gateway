@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// unsetEnv 为依赖 LookupEnv 语义的测试真正移除变量，而不是把变量设置为空字符串。
-// 测试结束时恢复调用进程原值，避免本机或 CI 环境污染后续用例。
+// unsetEnv 为依赖 LookupEnv 语义的测试真正移除变量，而不是把变量设置为空字符串
+// 测试结束时恢复调用进程原值，避免本机或 CI 环境污染后续用例
 func unsetEnv(t *testing.T, keys ...string) {
 	t.Helper()
 	for _, key := range keys {
@@ -133,7 +133,7 @@ func TestLoadBootstrapConfig_InvalidShutdownTimeout(t *testing.T) {
 
 func TestLoadBootstrapConfig_LegacyVariablesReturnMigrationErrors(t *testing.T) {
 	unsetAllConfigEnv(t)
-	// 即使值为空，LookupEnv 仍必须识别出旧部署清单还在声明已移除变量。
+	// 即使值为空，LookupEnv 仍必须识别出旧部署清单还在声明已移除变量
 	t.Setenv(envUpstreamURL, "")
 	t.Setenv(envRequestTimeout, "3s")
 

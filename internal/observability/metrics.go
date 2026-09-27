@@ -13,22 +13,23 @@ import (
 	"github.com/helantianshen/gateway/internal/dataplane/requestctx"
 )
 
+// DefaultRouteSeriesBudget 是保留单独 route 标签的默认路由数量上限
 const DefaultRouteSeriesBudget = 1000
 
-// EndpointState 是 endpoint Collector 读取 Phase 4 atomic 状态所需的最小接口。
+// EndpointState 提供 endpoint Collector 读取健康和活跃请求数的视图
 type EndpointState interface {
 	Healthy() bool
 	ActiveRequests() int64
 }
 
-// EndpointSource 把稳定配置身份与可变 endpoint 状态绑定。
+// EndpointSource 把稳定配置身份与可变 endpoint 状态绑定
 type EndpointSource struct {
 	UpstreamID string
 	EndpointID string
 	State      EndpointState
 }
 
-// Metrics 持有单个 Application 私有的 Registry 和全部 Collector。
+// Metrics 持有单个 Application 私有的 Registry 和全部 Collector
 type Metrics struct {
 	registry *prometheus.Registry
 
@@ -46,8 +47,10 @@ type Metrics struct {
 	endpoints           *endpointCollector
 }
 
-// NewMetrics 创建并注册一组完全私有的 Gateway 指标。
+// NewMetrics 创建并注册一组完全私有的 Gateway 指标
 func NewMetrics(routeCount, routeSeriesBudget int) (*Metrics, error) {
+	// Registry 属于单个 Metrics 实例，不自动注册 Go/process 等默认指标
+	// 路由数量超过预算时，整组 route_id/path_template 标签统一聚合
 	if routeSeriesBudget <= 0 {
 		routeSeriesBudget = DefaultRouteSeriesBudget
 	}
@@ -100,6 +103,7 @@ func NewMetrics(routeCount, routeSeriesBudget int) (*Metrics, error) {
 		endpoints:           newEndpointCollector(),
 	}
 
+	// 启动时注册固定 Collector；任一注册失败都不返回部分可用的 Metrics
 	collectors := []prometheus.Collector{
 		metrics.requestsTotal,
 		metrics.requestDuration,
@@ -116,11 +120,12 @@ func NewMetrics(routeCount, routeSeriesBudget int) (*Metrics, error) {
 			return nil, fmt.Errorf("注册 Gateway Prometheus collector 失败: %w", err)
 		}
 	}
+	// 静态配置只在进程启动时编译一次，版本在本进程生命周期内恒为 1
 	metrics.configVersion.Set(1)
 	return metrics, nil
 }
 
-// BindEndpoints 在 listener 创建前绑定配置身份与 atomic 状态。
+// BindEndpoints 在 listener 创建前绑定配置身份与 atomic 状态
 func (m *Metrics) BindEndpoints(sources []EndpointSource) error {
 	if m == nil || m.endpoints == nil {
 		return fmt.Errorf("绑定 endpoint 指标失败: Metrics 不能为空")
@@ -128,12 +133,12 @@ func (m *Metrics) BindEndpoints(sources []EndpointSource) error {
 	return m.endpoints.bind(sources)
 }
 
-// Handler 返回只暴露当前私有 Registry 的 Prometheus Handler。
+// Handler 返回只暴露当前私有 Registry 的 Prometheus Handler
 func (m *Metrics) Handler() http.Handler {
 	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{EnableOpenMetrics: true})
 }
 
-// Registry 返回私有 Registry，供测试和后续受控组合使用。
+// Registry 返回该 Metrics 实例拥有的私有 Registry
 func (m *Metrics) Registry() *prometheus.Registry {
 	if m == nil {
 		return nil
@@ -141,25 +146,26 @@ func (m *Metrics) Registry() *prometheus.Registry {
 	return m.registry
 }
 
-// RouteDetailsEnabled 表示 per-route 指标是否仍在预算内。
+// RouteDetailsEnabled 表示 per-route 指标是否仍在预算内
 func (m *Metrics) RouteDetailsEnabled() bool {
 	return m != nil && m.routeDetailsEnabled
 }
 
-// RequestStarted 实现 middleware.RequestObserver。
+// RequestStarted 实现 middleware.RequestObserver
 func (m *Metrics) RequestStarted() {
 	if m != nil {
 		m.inflightRequests.Inc()
 	}
 }
 
-// RequestFinished 实现 middleware.RequestObserver。
+// RequestFinished 实现 middleware.RequestObserver
 func (m *Metrics) RequestFinished(method string, snapshot requestctx.Snapshot, duration time.Duration) {
 	if m == nil {
 		return
 	}
 	m.inflightRequests.Dec()
 
+	// 标签只使用归一化后的 Method、状态类别和配置身份，不包含原始 URL 或 Request ID
 	methodLabel := normalizeMethod(method)
 	statusClass := normalizeStatusClass(snapshot.ResponseStatus)
 	upstreamID := normalizeEmpty(snapshot.UpstreamID)
@@ -168,10 +174,13 @@ func (m *Metrics) RequestFinished(method string, snapshot requestctx.Snapshot, d
 	m.requestsTotal.WithLabelValues(methodLabel, statusClass, upstreamID, errorKind).Inc()
 	m.requestDuration.WithLabelValues(methodLabel, statusClass, upstreamID).Observe(duration.Seconds())
 
+	// 只有网关自产且已形成 4xx/5xx 响应的错误进入拒绝计数
+	// 客户端取消仅记录内部 499，不作为发给客户端的拒绝响应
 	if snapshot.ErrorKind != "" && snapshot.ErrorKind != "CLIENT_CANCELED" && snapshot.ResponseStatus >= 400 {
 		m.rejectionsTotal.WithLabelValues(snapshot.ErrorKind).Inc()
 	}
 
+	// 未命中路由使用固定标签；超出预算时所有路由归并为 _other
 	routeID, pathTemplate := "_unmatched", "_unmatched"
 	if snapshot.RouteID != "" {
 		routeID = snapshot.RouteID
@@ -182,6 +191,7 @@ func (m *Metrics) RequestFinished(method string, snapshot requestctx.Snapshot, d
 	}
 	m.routeRequests.WithLabelValues(routeID, pathTemplate, statusClass).Inc()
 
+	// 只有记录了 endpoint 尝试的请求才产生 upstream 维度指标
 	if snapshot.Attempts > 0 {
 		endpointID := normalizeEmpty(snapshot.EndpointID)
 		outcome := normalizeEmpty(snapshot.Outcome)
@@ -261,11 +271,13 @@ func (c *endpointCollector) bind(sources []EndpointSource) error {
 	return nil
 }
 
+// Describe 提供 endpoint Collector 固定的两个指标描述
 func (c *endpointCollector) Describe(descriptions chan<- *prometheus.Desc) {
 	descriptions <- c.activeDesc
 	descriptions <- c.healthDesc
 }
 
+// Collect 在每次抓取时读取 endpoint 的当前原子状态
 func (c *endpointCollector) Collect(metrics chan<- prometheus.Metric) {
 	c.mu.RLock()
 	sources := append([]EndpointSource(nil), c.sources...)

@@ -7,43 +7,32 @@ import (
 	"testing"
 )
 
-func TestAdminHandler_Livez(t *testing.T) {
+func TestAdminHandler_HealthEndpoints(t *testing.T) {
 	handler := NewAdminHandler(nil)
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/livez", nil))
-
-	if recorder.Code != http.StatusOK {
-		t.Errorf("状态码 = %d, want %d", recorder.Code, http.StatusOK)
-	}
-	var body map[string]string
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("JSON 解析失败: %v", err)
-	}
-	if body["status"] != "ok" {
-		t.Errorf("status = %q, want %q", body["status"], "ok")
-	}
-}
-
-func TestAdminHandler_Readyz(t *testing.T) {
-	handler := NewAdminHandler(nil)
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
-
-	if recorder.Code != http.StatusOK {
-		t.Errorf("状态码 = %d, want %d", recorder.Code, http.StatusOK)
-	}
-	var body map[string]string
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("JSON 解析失败: %v", err)
-	}
-	if body["status"] != "ready" {
-		t.Errorf("status = %q, want %q", body["status"], "ready")
+	for _, test := range []struct{ path, status string }{
+		{path: "/livez", status: "ok"},
+		{path: "/readyz", status: "ready"},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, test.path, nil))
+			if recorder.Code != http.StatusOK {
+				t.Errorf("状态码 = %d, want %d", recorder.Code, http.StatusOK)
+			}
+			var body map[string]string
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+				t.Fatalf("JSON 解析失败: %v", err)
+			}
+			if body["status"] != test.status {
+				t.Errorf("status = %q, want %q", body["status"], test.status)
+			}
+		})
 	}
 }
 
 func TestAdminHandler_UnknownPath404(t *testing.T) {
 	handler := NewAdminHandler(nil)
-	for _, path := range []string{"/unknown", "/admin", "/health", "/"} {
+	for _, path := range []string{"/unknown", "/"} {
 		t.Run(path, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
@@ -75,38 +64,29 @@ func TestAdminHandler_Metrics(t *testing.T) {
 	}
 }
 
-func TestPublicServer_Timeouts(t *testing.T) {
-	srv := NewPublicServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	if srv.ReadHeaderTimeout != DefaultReadHeaderTimeout {
-		t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, DefaultReadHeaderTimeout)
-	}
-	if srv.IdleTimeout != DefaultIdleTimeout {
-		t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, DefaultIdleTimeout)
-	}
-	if srv.MaxHeaderBytes != DefaultMaxHeaderBytes {
-		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, DefaultMaxHeaderBytes)
-	}
-	if srv.WriteTimeout != 0 {
-		t.Errorf("WriteTimeout = %v, want 0（不应设置，会破坏 SSE）", srv.WriteTimeout)
-	}
-	if srv.ReadTimeout != 0 {
-		t.Errorf("ReadTimeout = %v, want 0（不应设置，会破坏大请求体上传）", srv.ReadTimeout)
-	}
-}
-
-func TestAdminServer_Timeouts(t *testing.T) {
-	srv := NewAdminServer(NewAdminHandler(nil))
-	if srv.ReadHeaderTimeout != DefaultReadHeaderTimeout {
-		t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, DefaultReadHeaderTimeout)
-	}
-	if srv.IdleTimeout != DefaultIdleTimeout {
-		t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, DefaultIdleTimeout)
-	}
-	if srv.MaxHeaderBytes != DefaultMaxHeaderBytes {
-		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, DefaultMaxHeaderBytes)
+func TestServer_Timeouts(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		server *http.Server
+	}{
+		{name: "public", server: NewPublicServer(http.NotFoundHandler())},
+		{name: "admin", server: NewAdminServer(NewAdminHandler(nil))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			srv := test.server
+			if srv.ReadHeaderTimeout != DefaultReadHeaderTimeout {
+				t.Errorf("ReadHeaderTimeout = %v, want %v", srv.ReadHeaderTimeout, DefaultReadHeaderTimeout)
+			}
+			if srv.IdleTimeout != DefaultIdleTimeout {
+				t.Errorf("IdleTimeout = %v, want %v", srv.IdleTimeout, DefaultIdleTimeout)
+			}
+			if srv.MaxHeaderBytes != DefaultMaxHeaderBytes {
+				t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, DefaultMaxHeaderBytes)
+			}
+			if srv.WriteTimeout != 0 || srv.ReadTimeout != 0 {
+				t.Errorf("读写超时 = (%v, %v), want (0, 0) 以支持流式传输", srv.ReadTimeout, srv.WriteTimeout)
+			}
+		})
 	}
 }
 

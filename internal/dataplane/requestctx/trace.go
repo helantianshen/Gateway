@@ -2,8 +2,8 @@ package requestctx
 
 import "strings"
 
-// TraceIDFromTraceParent 从 Phase 5 支持的 W3C traceparent v00 中提取 trace ID。
-// 本阶段只做受控解析，不创建 Span，也不生成新的 Trace。
+// TraceIDFromTraceParent 仅接受 W3C traceparent v00，返回其中非零 trace ID
+// 此函数不创建 Span 或新的 trace ID
 func TraceIDFromTraceParent(traceParent string) (string, bool) {
 	if len(traceParent) != 55 ||
 		traceParent[2] != '-' ||

@@ -11,10 +11,10 @@ import (
 	router "github.com/helantianshen/gateway/internal/router"
 )
 
-// referenceMatcher 是差分测试使用的线性路由器。
+// referenceMatcher 是差分测试使用的线性路由器
 //
 // 它刻意不访问生产包的私有类型，也不调用生产实现的 Host、Method、Path 解析或
-// specificity helper。每次 Match 遍历全部声明并收集所有候选，再独立选出唯一最优项。
+// specificity helper。每次 Match 遍历全部声明并收集所有候选，再独立选出唯一最优项
 type referenceMatcher struct {
 	routes []referenceRoute
 }
@@ -298,7 +298,7 @@ func refNormalizeMethod(raw string) (string, error) {
 	return strings.ToUpper(method), nil
 }
 
-// refMatchMethod 返回请求态 specificity：显式 HEAD=2、其他显式或 GET fallback=1、any=0。
+// refMatchMethod 返回请求态 specificity：显式 HEAD=2、其他显式或 GET fallback=1、any=0
 func refMatchMethod(routeMethod, requestMethod string) (int, bool) {
 	if routeMethod == "" {
 		return 0, true
@@ -391,7 +391,7 @@ func refCompareCandidates(a, b refCandidate) int {
 }
 
 // refComparePath 逐段比较 static > param > catch-all。若共同前缀相同且一个模式
-// 已精确结束，另一个只靠空 catch-all 命中，则精确结束更具体。
+// 已精确结束，另一个只靠空 catch-all 命中，则精确结束更具体
 func refComparePath(a, b []refSegment) int {
 	maxLen := len(a)
 	if len(b) > maxLen {

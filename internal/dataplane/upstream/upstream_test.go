@@ -67,7 +67,7 @@ func TestNewCompiledUpstreamAndDeterministicSelection(t *testing.T) {
 		t.Fatalf("endpoint 初始状态错误: healthy=%v active=%d weight=%d", first.State().Healthy(), first.State().ActiveRequests(), first.Weight())
 	}
 
-	// 构造后修改输入值，不能改变运行时 target。
+	// 构造后修改输入值，不能改变运行时 target
 	configs[0].Target.Host = "mutated.invalid"
 	if got := first.Target().Host; got != "127.0.0.1:18080" {
 		t.Fatalf("runtime target 被输入切片修改: %q", got)

@@ -1,13 +1,4 @@
-// Package config 负责把本地启动参数与声明式 YAML 配置编译为网关运行时配置。
-//
-// 配置来源边界：
-//   - 环境变量只负责配置文件路径、public/admin 监听地址和优雅停机超时；
-//   - YAML 负责 upstream、route 与 policy 等业务配置；
-//   - Phase 0/1 的 upstream URL 和请求超时环境变量已移除，若仍设置会返回迁移错误。
-//
-// 本包完成静态加载、严格校验和强类型 upstream 编译，并调用生产 Router 编译器校验
-// 路由集合；请求侧匹配与负载均衡由数据面执行。本包不持有 endpoint 运行状态，
-// 也不实现动态配置或配置中心。
+// Package config 将本地启动参数和 YAML 业务配置编译为静态运行时配置
 package config
 
 import (
@@ -31,14 +22,14 @@ const (
 	envAdminAddr       = "GATEWAY_ADMIN_ADDR"
 	envShutdownTimeout = "GATEWAY_SHUTDOWN_TIMEOUT"
 
-	// 这两个旧变量只用于迁移检测，绝不能再参与运行配置编译。
+	// 旧变量只用于拒绝遗留部署配置
 	envUpstreamURL    = "GATEWAY_UPSTREAM_URL"
 	envRequestTimeout = "GATEWAY_REQUEST_TIMEOUT"
 )
 
-// BootstrapConfig 是随部署环境变化的本地启动参数。
-// ConfigFile 也作为语义校验错误中的文件路径使用；业务配置本身不复制到环境变量，
-// 从而保持 YAML 是 upstream、route 和 policy 的唯一事实来源。
+// BootstrapConfig 是随部署环境变化的本地启动参数
+// ConfigFile 也作为语义校验错误中的文件路径使用；业务配置本身不复制到环境变量
+// 从而保持 YAML 是 upstream、route 和 policy 的唯一事实来源
 type BootstrapConfig struct {
 	ConfigFile      string
 	PublicAddr      string
@@ -46,22 +37,22 @@ type BootstrapConfig struct {
 	ShutdownTimeout time.Duration
 }
 
-// EndpointTarget 是配置层编译后的不可变 endpoint 定义。
-// URL 使用值类型，避免运行时保留可被调用方替换的 *url.URL 指针。
+// EndpointTarget 是配置层编译后的不可变 endpoint 定义
+// URL 使用值类型，避免运行时保留可被调用方替换的 *url.URL 指针
 type EndpointTarget struct {
 	ID     string
 	URL    url.URL
 	Weight int
 }
 
-// UpstreamTarget 是逻辑 upstream 的强类型 endpoint 集合。
+// UpstreamTarget 是逻辑 upstream 的强类型 endpoint 集合
 type UpstreamTarget struct {
 	ID        string
 	Endpoints []EndpointTarget
 }
 
-// Config 是经过完整校验、可直接交给 Application 的强类型运行时配置。
-// Application 从 Upstreams 构建 endpoint pool，从 Spec.Routes 构建 Router。
+// Config 是经过完整校验、可直接交给 Application 的强类型运行时配置
+// Application 从 Upstreams 构建 endpoint pool，从 Spec.Routes 构建 Router
 type Config struct {
 	PublicAddr      string
 	AdminAddr       string
@@ -71,8 +62,8 @@ type Config struct {
 	Spec            *ConfigSpec
 }
 
-// Load 执行生产启动所需的完整配置管线：读取环境变量、严格加载 YAML、校验并编译。
-// 任一步失败都不会产生部分可用的 Config，调用方必须在创建任何 listener 前处理错误。
+// Load 执行生产启动所需的完整配置管线：读取环境变量、严格加载 YAML、校验并编译
+// 任一步失败都不会产生部分可用的 Config，调用方必须在创建任何 listener 前处理错误
 func Load() (*Config, error) {
 	bootstrap, err := LoadBootstrapConfig()
 	if err != nil {
@@ -85,12 +76,13 @@ func Load() (*Config, error) {
 	return Compile(spec, bootstrap)
 }
 
-// LoadBootstrapConfig 使用 os.LookupEnv 读取本地启动参数。
+// LoadBootstrapConfig 使用 os.LookupEnv 读取本地启动参数
 //
 // LookupEnv 能严格区分“未设置”和“已设置为空字符串”：前者采用默认值，后者作为
 // 明确的错误输入被拒绝。旧业务环境变量即使显式设置为空也会触发迁移错误，避免旧
-// 部署清单看似启动成功、实际却已经不再生效。
+// 部署清单看似启动成功、实际却已经不再生效
 func LoadBootstrapConfig() (BootstrapConfig, error) {
+	// 从固定默认值开始叠加环境变量；显式空值记录为错误，不回退默认值
 	bootstrap := BootstrapConfig{
 		ConfigFile:      defaultConfigFile,
 		PublicAddr:      defaultPublicAddr,
@@ -115,6 +107,7 @@ func LoadBootstrapConfig() (BootstrapConfig, error) {
 		}
 	}
 
+	// 旧业务变量即使为空也必须报错，避免部署以为它仍影响运行时
 	if _, exists := os.LookupEnv(envUpstreamURL); exists {
 		problems = append(problems, envUpstreamURL+" 已移除：upstream URL 现在必须在 YAML 的 upstreams[].endpoints[].url 中配置")
 	}
@@ -138,14 +131,11 @@ func readStringEnv(key string, target *string, problems *[]string) {
 	}
 }
 
-// Compile 把完整 ConfigSpec 与本地 BootstrapConfig 编译成 Application 使用的 Config。
-// Validate 由 Compile 自身调用，确保直接使用该公开入口的调用方也无法绕过结构、语义
-// 或当前运行约束。Validate 成功后再做 URL 和 duration 的强类型转换；转换失败
-// 理论上不可达，仍保留防御性错误以防未来校验规则与编译逻辑发生偏移。
-//
-// 从所有 upstream 提取全部 endpoint，生成强类型 Upstreams map。
-// 路由语法和冲突检测由 Validate 与 Application 共同调用 router.Compile 完成。
+// Compile 先校验 ConfigSpec，再生成带强类型 URL 和超时的运行配置
+// 结果保留 Spec 指针；调用方在 Application 使用期间不得修改该配置
 func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
+	// 先校验 YAML 的结构、引用与路由语义，再检查本地监听和停机参数
+	// 任一步失败都不会返回可供 Application 使用的部分配置
 	file := bootstrap.ConfigFile
 	if err := Validate(spec, file); err != nil {
 		return nil, err
@@ -160,8 +150,8 @@ func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 		return nil, fmt.Errorf("编译配置失败: shutdown 超时必须为正数")
 	}
 
-	// 为每个 upstream 深拷贝全部 endpoint 定义。URL 在 Validate 后理论上都可解析；
-	// 仍保留防御性错误，避免未来校验与编译规则漂移。
+	// 每个 endpoint 的 URL 解析为值，运行时目标不共享 YAML 中的字符串字段
+	// URL 已经通过 Validate；解析失败仍向调用方返回明确错误
 	upstreams := make(map[string]UpstreamTarget, len(spec.Upstreams))
 	for _, upstream := range spec.Upstreams {
 		if len(upstream.Endpoints) == 0 {
@@ -185,6 +175,7 @@ func Compile(spec *ConfigSpec, bootstrap BootstrapConfig) (*Config, error) {
 		upstreams[upstream.ID] = target
 	}
 
+	// 请求超时在数据面调用前转换一次，避免请求路径重复解析字符串
 	requestTimeout, err := time.ParseDuration(spec.Policies.RequestTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("编译配置失败: 已校验的 request_timeout 无法解析")

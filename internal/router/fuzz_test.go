@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// FuzzParsePathPattern 对路径模式解析做 fuzz 测试。
-// 确保任意输入不会导致 panic，合法模式能正确解析，非法模式返回错误。
+// FuzzParsePathPattern 对路径模式解析做 fuzz 测试
+// 确保任意输入不会导致 panic，合法模式能正确解析，非法模式返回错误
 func FuzzParsePathPattern(f *testing.F) {
 	// 添加种子用例
 	f.Add("/users")
@@ -32,8 +32,8 @@ func FuzzParsePathPattern(f *testing.F) {
 	})
 }
 
-// FuzzCompileAndMatch 对编译和匹配做 fuzz 测试。
-// 确保任意路由配置和请求不会导致 panic。
+// FuzzCompileAndMatch 对编译和匹配做 fuzz 测试
+// 确保任意路由配置和请求不会导致 panic
 func FuzzConflictDetection(f *testing.F) {
 	f.Add("/users/:id", "/users/:name", 0, 0)
 	f.Add("/users/profile", "/users/:id", 0, 0)
@@ -46,7 +46,7 @@ func FuzzConflictDetection(f *testing.F) {
 		a := CompileInput{RouteID: "a", Host: "api.example.com", Method: "GET", Path: pathA, Upstream: "mock", Priority: priorityA}
 		b := CompileInput{RouteID: "b", Host: "api.example.com", Method: "GET", Path: pathB, Upstream: "mock", Priority: priorityB}
 
-		// 冲突判定必须对输入顺序对称；任意路径字符串都不得造成 panic。
+		// 冲突判定必须对输入顺序对称；任意路径字符串都不得造成 panic
 		_, errAB := Compile([]CompileInput{a, b})
 		_, errBA := Compile([]CompileInput{b, a})
 		if (errAB == nil) != (errBA == nil) {

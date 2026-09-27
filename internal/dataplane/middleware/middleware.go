@@ -1,4 +1,4 @@
-// Package middleware 提供 public/admin HTTP 请求的全局中间件链。
+// Package middleware 提供 public/admin HTTP 请求的全局中间件链
 package middleware
 
 import (
@@ -10,14 +10,14 @@ import (
 	"github.com/helantianshen/gateway/internal/dataplane/requestctx"
 )
 
-// RequestObserver 是 Access 层向 Prometheus 上报请求生命周期的最小接口。
-// observability.Metrics 实现该接口；admin 链传 nil，避免 scrape 自身污染 public 指标。
+// RequestObserver 是 Access 层向 Prometheus 上报请求生命周期的最小接口
+// observability.Metrics 实现该接口；admin 链传 nil，避免 scrape 自身污染 public 指标
 type RequestObserver interface {
 	RequestStarted()
 	RequestFinished(method string, snapshot requestctx.Snapshot, duration time.Duration)
 }
 
-// Options 控制中间件运行依赖。零值 Logger/Generator 会使用安全默认值。
+// Options 控制中间件运行依赖。零值 Logger/Generator 会使用安全默认值
 type Options struct {
 	Logger             *zap.Logger
 	Observer           RequestObserver
@@ -26,10 +26,12 @@ type Options struct {
 	Limits             Limits
 }
 
-// NewPublicHandler 按固定顺序构建 public 数据面中间件链。
+// NewPublicHandler 按固定顺序构建 public 数据面中间件链
 func NewPublicHandler(next http.Handler, options Options) http.Handler {
 	options = normalizeOptions(options)
 
+	// 包装从内向外构建，执行顺序为 Context → RequestID → Trace → Observe
+	// → Recovery → Guard → 数据面；Observe 因此能记录 Recovery 写出的 500
 	handler := Guard(options.Limits)(next)
 	handler = Recovery(options.Logger)(handler)
 	handler = Observe(options.Logger, options.Observer)(handler)
@@ -40,7 +42,7 @@ func NewPublicHandler(next http.Handler, options Options) http.Handler {
 }
 
 // NewAdminHandler 构建 admin 链。它保留 Request ID、访问日志和 Recovery，但不执行
-// public body/header Guard，也不计入 gateway public request metrics。
+// public body/header Guard，也不计入 gateway public request metrics
 func NewAdminHandler(next http.Handler, options Options) http.Handler {
 	options = normalizeOptions(options)
 
@@ -66,7 +68,7 @@ func normalizeOptions(options Options) Options {
 	return options
 }
 
-// InitializeRequestContext 在任何业务中间件之前安装请求私有元数据指针。
+// InitializeRequestContext 在任何业务中间件之前安装请求私有元数据指针
 func InitializeRequestContext(configVersion uint64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +78,7 @@ func InitializeRequestContext(configVersion uint64) func(http.Handler) http.Hand
 	}
 }
 
-// RequestID 校验或生成 request ID，并同步写入 request/response Header。
+// RequestID 校验或生成 request ID，并同步写入 request/response Header
 func RequestID(generate func() string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +100,7 @@ func RequestID(generate func() string) func(http.Handler) http.Handler {
 	}
 }
 
-// TraceContext 只提取合法 W3C traceparent 的 trace ID，不创建 Span。
+// TraceContext 只提取合法 W3C traceparent 的 trace ID，不创建 Span
 func TraceContext() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

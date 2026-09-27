@@ -30,12 +30,6 @@ func validSpec() *ConfigSpec {
 	}
 }
 
-func TestValidate_Valid(t *testing.T) {
-	if err := Validate(validSpec(), "gateway.yaml"); err != nil {
-		t.Fatalf("合法配置返回错误: %v", err)
-	}
-}
-
 func TestValidate_StructuralAndSemanticRules(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -143,14 +137,14 @@ func TestValidate_RouterSyntaxAndConflicts(t *testing.T) {
 	}
 }
 
-func TestValidate_AcceptsMultiplePhase3Routes(t *testing.T) {
+func TestValidate_AcceptsMultipleRoutes(t *testing.T) {
 	spec := validSpec()
 	spec.Routes = append(spec.Routes,
 		RouteSpec{ID: "users", Host: "api.example.com", Method: "GET", Path: "/users/:id", Upstream: "mock-service", Priority: 10, PreserveHost: true},
 		RouteSpec{ID: "files", Host: "*.example.com", Path: "/files/*path", Upstream: "mock-service"},
 	)
 	if err := Validate(spec, "routes.yaml"); err != nil {
-		t.Fatalf("合法 Phase 3 多路由配置返回错误: %v", err)
+		t.Fatalf("合法多路由配置返回错误: %v", err)
 	}
 }
 
@@ -170,22 +164,6 @@ func TestValidate_AggregatesAllProblems(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("聚合错误未包含 %q: %v", want, err)
 		}
-	}
-}
-
-func TestValidate_Phase4EndpointConstraints(t *testing.T) {
-	spec := validSpec()
-	spec.Upstreams[0].Endpoints = nil
-	if err := Validate(spec, "phase4.yaml"); err == nil || !strings.Contains(err.Error(), "至少需要配置一个 endpoint") {
-		t.Fatalf("空 endpoint 集合错误 = %v", err)
-	}
-
-	spec = validSpec()
-	spec.Upstreams[0].Endpoints = append(spec.Upstreams[0].Endpoints,
-		EndpointSpec{ID: "mock-2", URL: "http://127.0.0.1:18081", Weight: 50},
-	)
-	if err := Validate(spec, "phase4.yaml"); err != nil {
-		t.Fatalf("合法多 endpoint 配置返回错误: %v", err)
 	}
 }
 
@@ -215,7 +193,7 @@ func TestCompile_ProducesStronglyTypedConfigAndRetainsSpec(t *testing.T) {
 	if upstream.Endpoints[1].ID != "mock-2" || upstream.Endpoints[1].Weight != 50 {
 		t.Errorf("第二个 EndpointTarget 错误: %#v", upstream.Endpoints[1])
 	}
-	// Config target 必须与 YAML slice 解耦；修改原始 EndpointSpec 不影响已编译值。
+	// Config target 必须与 YAML slice 解耦；修改原始 EndpointSpec 不影响已编译值
 	spec.Upstreams[0].Endpoints[0].URL = "http://mutated.invalid"
 	if upstream.Endpoints[0].URL.Host != "127.0.0.1:18080" {
 		t.Errorf("编译 target 引用了可变 ConfigSpec: %#v", upstream.Endpoints[0])
@@ -238,6 +216,6 @@ func TestCompile_CannotBypassValidation(t *testing.T) {
 		ShutdownTimeout: time.Second,
 	})
 	if err == nil || !strings.Contains(err.Error(), "至少需要配置一个 endpoint") {
-		t.Fatalf("Compile 绕过了 Phase 4 校验: %v", err)
+		t.Fatalf("Compile 绕过了 endpoint 校验: %v", err)
 	}
 }

@@ -1,13 +1,4 @@
-// Package main 是 gateway 进程的唯一正式入口。
-//
-// 职责（Phase 5）：
-//   - 严格加载、校验并编译配置；
-//   - 只有完整配置成功后才创建 Application 和监听器；
-//   - 使用 signal.NotifyContext 监听 SIGINT/SIGTERM；
-//   - 使用 Application 的 zap logger 写结构化生命周期日志；
-//   - 调用 Application.Run，并根据运行或优雅停机结果设置退出码。
-//
-// 本包不承载代理、路由、负载均衡、中间件或配置解析等业务逻辑。
+// Package main 启动 gateway 进程并管理信号与退出状态
 package main
 
 import (
@@ -29,13 +20,14 @@ func main() {
 }
 
 func run() int {
-	// logger 尚未创建前的配置错误使用标准错误输出；配置内容和 URL 原始值不会回显。
+	// logger 尚未创建前的配置错误使用标准错误输出；配置内容和 URL 原始值不会回显
 	cfg, err := config.Load()
 	if err != nil {
 		log.Printf("网关配置加载失败: %v", err)
 		return 1
 	}
 
+	// 配置完整编译后才装配 Application；New 成功时两个监听器已经绑定
 	app, err := bootstrap.New(cfg)
 	if err != nil {
 		log.Printf("网关启动失败: %v", err)
@@ -53,6 +45,7 @@ func run() int {
 		zap.String("admin_addr", app.AdminAddr().String()),
 	)
 
+	// 信号只负责取消运行 Context，双 Server 停机与资源回收由 Application.Run 处理
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

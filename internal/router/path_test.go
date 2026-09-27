@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// newRequest 构造一个 HTTP 请求，正确设置 Path 和 RawPath。
-// 使用 url.ParseRequestURI 确保 EscapedPath() 返回正确的编码路径。
+// newRequest 构造一个 HTTP 请求，正确设置 Path 和 RawPath
+// 使用 url.ParseRequestURI 确保 EscapedPath() 返回正确的编码路径
 func newRequest(t *testing.T, rawurl string) *http.Request {
 	t.Helper()
 	u, err := url.ParseRequestURI(rawurl)

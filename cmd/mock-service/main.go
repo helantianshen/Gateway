@@ -1,12 +1,4 @@
-// Package main 是 mock-service 进程入口，用于演示和测试网关反向代理。
-//
-// 提供以下端点：
-//   - GET /hello?name=xxx: 返回 JSON 格式的问候语；
-//   - POST /echo: 原样返回请求体和 Content-Type；
-//   - GET /slow?delay=duration: 等待指定时长后返回，用于测试超时；
-//   - GET /stream?count=N: 返回 SSE 格式的流式响应，用于测试流式代理。
-//
-// 仅使用 Go 标准库，不引入任何第三方依赖。
+// Package main 提供网关本地演示和测试用的 HTTP 上游服务
 package main
 
 import (
@@ -53,7 +45,7 @@ func newMockHandler(instanceID string) http.Handler {
 }
 
 // withInstanceID 为所有响应写入稳定实例 ID，便于通过真实 HTTP 请求观察网关的
-// endpoint 选择序列。该标识只属于本地 mock-service，不由 Gateway 注入。
+// endpoint 选择序列。该标识只属于本地 mock-service，不由 Gateway 注入
 func withInstanceID(instanceID string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(mockInstanceHeader, instanceID)
@@ -61,9 +53,9 @@ func withInstanceID(instanceID string, next http.Handler) http.Handler {
 	})
 }
 
-// handleHello 返回 JSON 格式的问候语。
+// handleHello 返回 JSON 格式的问候语
 //
-// Query 参数 name 指定问候对象，默认为 "world"。
+// Query 参数 name 指定问候对象，默认为 "world"
 // 响应格式：{"message": "Hello, name!"}
 func handleHello(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
@@ -76,17 +68,14 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleEcho 以流式 copy 原样返回请求体，不把完整 body 缓存在内存。
+// handleEcho 以流式 copy 原样返回请求体，不把完整 body 缓存在内存
 func handleEcho(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, r.Body)
 }
 
-// handleSlow 等待指定时长后返回。
-//
-// Query 参数 delay 指定等待时长（如 "2s"），默认 1s。
-// 用于测试网关的请求超时行为。
+// handleSlow 用 delay 指定等待时长，缺省为 1s，用于模拟慢上游
 func handleSlow(w http.ResponseWriter, r *http.Request) {
 	delayStr := r.URL.Query().Get("delay")
 	if delayStr == "" {
@@ -113,10 +102,10 @@ func handleSlow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleStream 返回 SSE 格式的流式响应。
+// handleStream 返回 SSE 格式的流式响应
 //
-// Query 参数 count 指定事件数量（默认 5），interval 指定事件间隔（默认 100ms）。
-// 用于测试网关对流式响应的代理能力，验证首个事件在连接结束前对客户端可见。
+// Query 参数 count 指定事件数量（默认 5），interval 指定事件间隔（默认 100ms）
+// 用于测试网关对流式响应的代理能力，验证首个事件在连接结束前对客户端可见
 func handleStream(w http.ResponseWriter, r *http.Request) {
 	countStr := r.URL.Query().Get("count")
 	count, err := strconv.Atoi(countStr)
@@ -130,6 +119,7 @@ func handleStream(w http.ResponseWriter, r *http.Request) {
 		interval = 100 * time.Millisecond
 	}
 
+	// 没有 Flush 能力时无法保证事件在响应结束前送达，直接拒绝流式示例
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -141,6 +131,7 @@ func handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.WriteHeader(http.StatusOK)
 
+	// 每个 tick 写一个完整 SSE 事件并立即 Flush；客户端取消时退出循环
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for i := 0; i < count; i++ {

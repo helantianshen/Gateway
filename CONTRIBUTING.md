@@ -4,8 +4,10 @@
 
 ## 开发环境
 
-- Go 1.26.3（toolchain 固定）
-- Phase 0–1 仅使用 Go 标准库，不引入任何第三方依赖
+- `go.mod` 要求 Go 1.26.5，CI 固定为 1.26.5；没有 `toolchain` 指令。先用 `go version` 核实本机，不把历史记录当成当前环境。
+- 当前为 Phase 5；直接依赖包括 yaml.v3、httpsnoop、zap 和 prometheus/client_golang，确切版本见 go.mod。
+- 开发前阅读 [当前架构](.agent/PROJECT.md)、[当前审查](docs/10-current-architecture-review.md)及适用阶段计划。目标架构中的未来接口不是当前实现。
+- 示例运行需要三个 mock-service；命令与配置见 README。测试本身不依赖 etcd、Redis 或外部数据库。
 
 ## 开发流程
 
@@ -13,10 +15,16 @@
 2. 确保代码通过全部检查：
 
    ```bash
-   make fmt-check vet test race build
+   make verify
    ```
 
 3. 提交 Pull Request 到 `main` 分支。
+
+`make verify` 包含 diff、格式、vet、单测、race 和 build；`make audit` 另行执行 staticcheck 与 govulncheck，可能需要下载工具和访问漏洞库。`go mod verify` 仅验证模块缓存完整性。
+
+修改协议或流式行为时，补充真实 TCP/HTTP 测试；路由变化应比较完整匹配结果。benchmark/fuzz 命令见 Makefile，部分命令会覆盖仓库中的历史结果，执行前确认输出位置。性能和安全结论必须注明工具链、命令与本次证据。
+
+修改架构、依赖、配置 schema 或错误契约时，同步 README 和 `.agent/PROJECT.md`；历史报告保留原始时间与证据，通过新报告说明后续变化。
 
 ## 代码规范
 
