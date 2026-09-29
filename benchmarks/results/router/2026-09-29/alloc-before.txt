@@ -1,0 +1,21 @@
+File: gateway-router-prealloc.test
+Build ID: 24f7912b343b4005f0fc392afb70979ef9c05f52
+Type: alloc_objects
+Time: 2026-09-29 21:39:28 CST
+Showing nodes accounting for 24856164, 99.77% of 24914467 total
+Dropped 54 nodes (cum <= 124572)
+      flat  flat%   sum%        cum   cum%
+  10344071 41.52% 41.52%   10344071 41.52%  github.com/helantianshen/gateway/internal/router.appendParamValue (inline)
+   9017803 36.20% 77.71%    9017803 36.20%  github.com/helantianshen/gateway/internal/router.buildMatchResult (inline)
+   3134948 12.58% 90.30%    3134948 12.58%  net/netip.parseIPv4Fields
+   2359331  9.47% 99.77%    2359331  9.47%  github.com/helantianshen/gateway/internal/router.normalizeHostname (inline)
+        11 4.4e-05% 99.77%   24883217 99.87%  github.com/helantianshen/gateway/internal/router.BenchmarkRouteMatrix.func1
+         0     0% 99.77%   24856153 99.77%  github.com/helantianshen/gateway/internal/router.(*Router).Match
+         0     0% 99.77%    5494279 22.05%  github.com/helantianshen/gateway/internal/router.NormalizeHost
+         0     0% 99.77%   24883206 99.87%  github.com/helantianshen/gateway/internal/router.benchmarkMatchRequest
+         0     0% 99.77%   19361874 77.71%  github.com/helantianshen/gateway/internal/router.matchMethodTree (inline)
+         0     0% 99.77%   19361874 77.71%  github.com/helantianshen/gateway/internal/router.matchPath
+         0     0% 99.77%    3134948 12.58%  net/netip.ParseAddr
+         0     0% 99.77%    3134948 12.58%  net/netip.parseIPv4
+         0     0% 99.77%   24883217 99.87%  testing.(*B).launch
+         0     0% 99.77%   24908340   100%  testing.(*B).runN

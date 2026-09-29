@@ -1,0 +1,22 @@
+go version go1.27.1-X:nodwarf5 linux/amd64
+Linux 7.2.7-1-cachyos x86_64
+Architecture:                            x86_64
+CPU op-mode(s):                          32-bit, 64-bit
+Address sizes:                           48 bits physical, 48 bits virtual
+Byte Order:                              Little Endian
+CPU(s):                                  16
+On-line CPU(s) list:                     0-15
+Vendor ID:                               AuthenticAMD
+Model name:                              AMD Ryzen 7 7735H with Radeon Graphics
+CPU family:                              25
+Model:                                   68
+Thread(s) per core:                      2
+Core(s) per socket:                      8
+Socket(s):                               1
+Stepping:                                1
+Microcode version:                       0xa404108
+Frequency boost:                         enabled
+CPU(s) scaling MHz:                      84%
+CPU max MHz:                             4830.6001
+5dcfbf1f0d7e9171b5364ad526dd74e65cf364a9
+f14574c50c4fb811cba639587f355bdc7297f0b37bb331c444c64d2eda00a4fc  internal/router/bench_test.go

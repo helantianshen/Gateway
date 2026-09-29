@@ -1,0 +1,17 @@
+File: gateway-router-after.test
+Build ID: bad71e796807b4d92266ebe3bce56d648bc3aa4c
+Type: alloc_objects
+Time: 2026-09-29 21:48:16 CST
+Showing nodes accounting for 11118863, 99.01% of 11229905 total
+Dropped 71 nodes (cum <= 56149)
+      flat  flat%   sum%        cum   cum%
+  11118847 99.01% 99.01%   11118847 99.01%  github.com/helantianshen/gateway/internal/router.buildMatchResult (inline)
+        16 0.00014% 99.01%   11214436 99.86%  github.com/helantianshen/gateway/internal/router.BenchmarkRouteMatrix.func1
+         0     0% 99.01%   11118847 99.01%  github.com/helantianshen/gateway/internal/router.(*Router).Match
+         0     0% 99.01%      95573  0.85%  github.com/helantianshen/gateway/internal/router.Compile
+         0     0% 99.01%   11214420 99.86%  github.com/helantianshen/gateway/internal/router.benchmarkMatchRequest
+         0     0% 99.01%   11118847 99.01%  github.com/helantianshen/gateway/internal/router.matchMethodTree
+         0     0% 99.01%   11118847 99.01%  github.com/helantianshen/gateway/internal/router.matchPath
+         0     0% 99.01%   11118847 99.01%  github.com/helantianshen/gateway/internal/router.matchTree (inline)
+         0     0% 99.01%   11188490 99.63%  testing.(*B).launch
+         0     0% 99.01%   11226104   100%  testing.(*B).runN

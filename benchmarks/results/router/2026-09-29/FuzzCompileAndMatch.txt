@@ -1,0 +1,8 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/4 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 4/4 completed, now fuzzing with 4 workers
+fuzz: elapsed: 3s, execs: 137786 (45926/sec), new interesting: 175 (total: 179)
+fuzz: elapsed: 6s, execs: 255558 (39258/sec), new interesting: 185 (total: 189)
+fuzz: elapsed: 9s, execs: 647947 (130756/sec), new interesting: 188 (total: 192)
+fuzz: elapsed: 11s, execs: 762433 (57228/sec), new interesting: 189 (total: 193)
+PASS
+ok  	github.com/helantianshen/gateway/internal/router	11.006s

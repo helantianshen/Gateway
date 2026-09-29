@@ -1,0 +1,37 @@
+git diff --check
+go vet ./...
+go test ./...
+?   	github.com/helantianshen/gateway/cmd/gateway	[no test files]
+ok  	github.com/helantianshen/gateway/cmd/mock-service	(cached)
+ok  	github.com/helantianshen/gateway/internal/bootstrap	0.042s
+ok  	github.com/helantianshen/gateway/internal/config	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/gateway	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/middleware	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/policy	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/proxy	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/requestctx	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/response	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/server	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/transport	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	(cached)
+ok  	github.com/helantianshen/gateway/internal/observability	(cached)
+ok  	github.com/helantianshen/gateway/internal/router	(cached)
+go test -race ./...
+?   	github.com/helantianshen/gateway/cmd/gateway	[no test files]
+ok  	github.com/helantianshen/gateway/cmd/mock-service	(cached)
+ok  	github.com/helantianshen/gateway/internal/bootstrap	1.065s
+ok  	github.com/helantianshen/gateway/internal/config	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/gateway	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/middleware	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/policy	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/proxy	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/requestctx	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/response	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/server	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/transport	(cached)
+ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	(cached)
+ok  	github.com/helantianshen/gateway/internal/observability	(cached)
+ok  	github.com/helantianshen/gateway/internal/router	(cached)
+go build ./...

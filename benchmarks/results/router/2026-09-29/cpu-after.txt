@@ -1,0 +1,110 @@
+File: gateway-router-after.test
+Build ID: bad71e796807b4d92266ebe3bce56d648bc3aa4c
+Type: cpu
+Time: 2026-09-29 21:48:15 CST
+Duration: 1.67s, Total samples = 2.02s (120.80%)
+Showing nodes accounting for 1.78s, 88.12% of 2.02s total
+Dropped 59 nodes (cum <= 0.01s)
+      flat  flat%   sum%        cum   cum%
+     0.15s  7.43%  7.43%      0.15s  7.43%  indexbytebody
+     0.09s  4.46% 11.88%      1.70s 84.16%  github.com/helantianshen/gateway/internal/router.(*Router).Match
+     0.09s  4.46% 16.34%      0.09s  4.46%  internal/bytealg.IndexByteString
+     0.08s  3.96% 20.30%      0.34s 16.83%  github.com/helantianshen/gateway/internal/router.findStaticChild.func1 (inline)
+     0.08s  3.96% 24.26%      0.08s  3.96%  github.com/helantianshen/gateway/internal/router.validateDNSName
+     0.08s  3.96% 28.22%      0.44s 21.78%  sort.Search (inline)
+     0.07s  3.47% 31.68%      1.27s 62.87%  github.com/helantianshen/gateway/internal/router.matchPath
+     0.07s  3.47% 35.15%      0.23s 11.39%  runtime.mallocgcSmallScanNoHeader
+     0.06s  2.97% 38.12%      0.62s 30.69%  github.com/helantianshen/gateway/internal/router.buildMatchResult (inline)
+     0.05s  2.48% 40.59%      0.10s  4.95%  github.com/helantianshen/gateway/internal/router.(*Router).hostCandidates
+     0.04s  1.98% 42.57%      0.04s  1.98%  cmpbody
+     0.04s  1.98% 44.55%      0.49s 24.26%  github.com/helantianshen/gateway/internal/router.findStaticChild
+     0.04s  1.98% 46.53%      0.25s 12.38%  github.com/helantianshen/gateway/internal/router.firstPrefixSegment
+     0.04s  1.98% 48.51%      0.04s  1.98%  github.com/helantianshen/gateway/internal/router.normalizeHostname
+     0.04s  1.98% 50.50%      0.07s  3.47%  internal/runtime/maps.(*Map).putSlotSmallFastStr
+     0.04s  1.98% 52.48%      0.04s  1.98%  internal/runtime/maps.memHashAES
+     0.04s  1.98% 54.46%      0.04s  1.98%  runtime.memclrNoHeapPointers
+     0.04s  1.98% 56.44%      0.10s  4.95%  runtime.scanObject
+     0.04s  1.98% 58.42%      0.04s  1.98%  strings.ToUpper
+     0.03s  1.49% 59.90%      0.27s 13.37%  internal/stringslite.IndexByte (inline)
+     0.03s  1.49% 61.39%      0.03s  1.49%  runtime.(*mspan).writeHeapBitsSmall
+     0.03s  1.49% 62.87%      0.03s  1.49%  runtime.heapArenaOf (inline)
+     0.03s  1.49% 64.36%      0.04s  1.98%  runtime.mallocgcSmallScanNoHeaderSC6
+     0.03s  1.49% 65.84%      0.04s  1.98%  runtime.scanblock
+     0.03s  1.49% 67.33%      0.04s  1.98%  runtime.typePointers.next
+     0.02s  0.99% 68.32%      0.02s  0.99%  countbody
+     0.02s  0.99% 69.31%      0.02s  0.99%  github.com/helantianshen/gateway/internal/router.matchPath.func1 (inline)
+     0.02s  0.99% 70.30%      0.04s  1.98%  github.com/helantianshen/gateway/internal/router.matchStaticPrefix
+     0.02s  0.99% 71.29%      0.02s  0.99%  runtime.cmpstring
+     0.02s  0.99% 72.28%      0.31s 15.35%  runtime.mallocgc
+     0.02s  0.99% 73.27%      0.06s  2.97%  runtime.mallocgcSmallScanNoHeaderSC5
+     0.02s  0.99% 74.26%      0.39s 19.31%  runtime.mapassign_faststr
+     0.02s  0.99% 75.25%      0.02s  0.99%  runtime.memequal
+     0.02s  0.99% 76.24%      0.02s  0.99%  runtime.nanotime (inline)
+     0.02s  0.99% 77.23%      0.08s  3.96%  runtime.newobject
+     0.02s  0.99% 78.22%      0.07s  3.47%  runtime.sweepone
+     0.01s   0.5% 78.71%      0.02s  0.99%  gcWriteBarrier
+     0.01s   0.5% 79.21%      1.30s 64.36%  github.com/helantianshen/gateway/internal/router.matchMethodTree
+     0.01s   0.5% 79.70%      1.28s 63.37%  github.com/helantianshen/gateway/internal/router.matchTree (inline)
+     0.01s   0.5% 80.20%      0.04s  1.98%  github.com/helantianshen/gateway/internal/router.splitAuthorityHost
+     0.01s   0.5% 80.69%      0.12s  5.94%  internal/runtime/maps.NewMap
+     0.01s   0.5% 81.19%      0.03s  1.49%  internal/runtime/maps.rand
+     0.01s   0.5% 81.68%      0.03s  1.49%  runtime.(*mheap).allocSpan
+     0.01s   0.5% 82.18%      0.02s  0.99%  runtime.(*pallocBits).summarize
+     0.01s   0.5% 82.67%      0.02s  0.99%  runtime.(*spanSet).push
+     0.01s   0.5% 83.17%      0.06s  2.97%  runtime.(*sweepLocked).sweep
+     0.01s   0.5% 83.66%      0.02s  0.99%  runtime.futexwakeup
+     0.01s   0.5% 84.16%      0.18s  8.91%  runtime.gcDrain
+     0.01s   0.5% 84.65%      0.02s  0.99%  runtime.makeSpanClass (inline)
+     0.01s   0.5% 85.15%      0.02s  0.99%  runtime.mallocgcSmallScanSlowPath
+     0.01s   0.5% 85.64%      0.02s  0.99%  runtime.mapaccess1_faststr
+     0.01s   0.5% 86.14%      0.02s  0.99%  runtime.mapaccess2_faststr
+     0.01s   0.5% 86.63%      0.02s  0.99%  runtime.markroot.func1
+     0.01s   0.5% 87.13%      0.02s  0.99%  runtime.rand
+     0.01s   0.5% 87.62%      0.02s  0.99%  runtime.scanObjectsSmall
+     0.01s   0.5% 88.12%      0.05s  2.48%  runtime.tryDeferToSpanScan
+         0     0% 88.12%      1.70s 84.16%  github.com/helantianshen/gateway/internal/router.BenchmarkRouteMatrix.func1
+         0     0% 88.12%      0.17s  8.42%  github.com/helantianshen/gateway/internal/router.NormalizeHost
+         0     0% 88.12%      1.70s 84.16%  github.com/helantianshen/gateway/internal/router.benchmarkMatchRequest
+         0     0% 88.12%      0.25s 12.38%  internal/runtime/maps.(*Map).growToSmall
+         0     0% 88.12%      0.25s 12.38%  internal/runtime/maps.newGroups (inline)
+         0     0% 88.12%      0.25s 12.38%  internal/runtime/maps.newarray
+         0     0% 88.12%      0.11s  5.45%  runtime.(*mcache).nextFree
+         0     0% 88.12%      0.10s  4.95%  runtime.(*mcache).refill
+         0     0% 88.12%      0.07s  3.47%  runtime.(*mcentral).cacheSpan
+         0     0% 88.12%      0.07s  3.47%  runtime.(*mcentral).grow
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mcentral).uncacheSpan
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mheap).alloc
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mheap).alloc.func1
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mheap).freeSpan (inline)
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mheap).freeSpan.func1
+         0     0% 88.12%      0.03s  1.49%  runtime.(*mheap).freeSpanLocked
+         0     0% 88.12%      0.04s  1.98%  runtime.(*mspan).initHeapBits
+         0     0% 88.12%      0.02s  0.99%  runtime.(*pageAlloc).free
+         0     0% 88.12%      0.02s  0.99%  runtime.(*pageAlloc).update
+         0     0% 88.12%      0.07s  3.47%  runtime.bgsweep
+         0     0% 88.12%      0.03s  1.49%  runtime.findRunnable
+         0     0% 88.12%      0.03s  1.49%  runtime.forEachP (inline)
+         0     0% 88.12%      0.03s  1.49%  runtime.forEachP.func1
+         0     0% 88.12%      0.03s  1.49%  runtime.forEachPInternal
+         0     0% 88.12%      0.21s 10.40%  runtime.gcBgMarkWorker
+         0     0% 88.12%      0.18s  8.91%  runtime.gcBgMarkWorker.func2
+         0     0% 88.12%      0.10s  4.95%  runtime.gcDrainMarkWorkerDedicated (inline)
+         0     0% 88.12%      0.08s  3.96%  runtime.gcDrainMarkWorkerIdle (inline)
+         0     0% 88.12%      0.03s  1.49%  runtime.gcMarkDone
+         0     0% 88.12%      0.03s  1.49%  runtime.gopreempt_m (inline)
+         0     0% 88.12%      0.03s  1.49%  runtime.goschedImpl
+         0     0% 88.12%      0.03s  1.49%  runtime.heapSetTypeNoHeader (inline)
+         0     0% 88.12%      0.12s  5.94%  runtime.makemap
+         0     0% 88.12%      0.06s  2.97%  runtime.markroot
+         0     0% 88.12%      0.04s  1.98%  runtime.markrootBlock
+         0     0% 88.12%      0.03s  1.49%  runtime.morestack
+         0     0% 88.12%      0.25s 12.38%  runtime.newarray
+         0     0% 88.12%      0.03s  1.49%  runtime.newstack
+         0     0% 88.12%      0.02s  0.99%  runtime.notewakeup
+         0     0% 88.12%      0.02s  0.99%  runtime.scanSpan
+         0     0% 88.12%      0.03s  1.49%  runtime.schedule
+         0     0% 88.12%      0.29s 14.36%  runtime.systemstack
+         0     0% 88.12%      0.03s  1.49%  strings.Count
+         0     0% 88.12%      0.27s 13.37%  strings.IndexByte (inline)
+         0     0% 88.12%      1.70s 84.16%  testing.(*B).launch
+         0     0% 88.12%      1.70s 84.16%  testing.(*B).runN

@@ -332,37 +332,36 @@ v1 不支持任意正则路由和脚本 DSL。
 
 ### 6.3 Router 接口
 
-```go
-type Router interface {
-    Match(host, method, path string) (MatchResult, bool)
-}
-
-type RouterCompiler interface {
-    Compile(routes []RouteSpec) (Router, error)
-}
+```text
+当前实现是 *router.Router；以下为调用方法签名
+Match(host, method string, pathSegments []string) (*MatchResult, *MatchError)
+AllowedMethods(host string, pathSegments []string) (methods []string, any bool, err *MatchError)
+Compile(routes []CompileInput) (*Router, error)
 ```
 
 自研 Radix Tree 只负责已校验配置的高效匹配。复杂冲突检查放在编译阶段，并通过独立的线性 reference matcher 做差分测试；reference matcher 不复用 Radix 的解析、冲突或比较函数。
 
 ### 6.4 路由规范表
 
-Phase 3 编码前必须把以下语义固化为表驱动测试 Oracle：
+当前路由语义由表驱动、独立差分与 fuzz 固定；维护记录见 [Router 维护报告](11-router-maintenance.md)：
 
 | 输入维度 | v1 固定语义 |
 |---|---|
 | Host 大小写 | ASCII lowercase 后匹配 |
 | Host 端口 | 使用规范化 hostname，不把请求端口作为路由条件 |
 | Host 尾点 | 去除单个 DNS trailing dot 后匹配 |
-| 非法请求 Host | 非法 authority、DNS 字符或 label 边界归一化为空；不能命中 exact/wildcard，仍可由任意 Host 路由接收 |
+| 非法请求 Host | 非空非法 authority、DNS 字符或 label 边界返回 400，不进入任意 Host；空 Host 单独表示无 authority |
 | 通配 Host | `*.example.com` 只匹配一个合法 DNS label，不匹配 `example.com`、`a.b.example.com` 或 `_bad.example.com` |
 | Method | 先精确匹配；HEAD 无显式路由时可回退到 GET 路由，但仍向 upstream 发送 HEAD |
-| Query | 完全不参与路由匹配，原样传递给 upstream |
+| Method miss | 正常匹配全部失败后探测其他 Method Tree；路径存在返回 405/Allow，否则 404；不自动处理 OPTIONS |
+| Query | 不参与路由匹配；转发遵循 ReverseProxy 的 query 处理规则 |
+| 配置 Path | decoded template；Unicode 与字面 `%/?/#` 保留，不解码 `%XX`；拒绝空段、控制字符、反斜杠、dot segment 和无效 UTF-8 |
 | Path 来源 | 使用 `URL.EscapedPath()` 建立稳定边界；非法转义直接 400 |
 | 编码斜杠 | v1 拒绝 `%2F`、`%5C` 等会改变分段语义的编码，避免网关与 upstream 解释不一致 |
-| 参数解码 | 按 segment 匹配后再 PathUnescape；要求有效 UTF-8 |
+| 参数解码 | 按字面斜杠分段后 PathUnescape，再匹配；要求有效 UTF-8 且不含控制字符 |
 | Dot segment | 拒绝 `.`、`..` 及其编码变体，不自动 Clean |
-| 重复斜杠 | 不自动合并；未显式配置时通常 404 |
-| 尾斜杠 | `/a` 与 `/a/` 是不同路由，不自动重定向 |
+| 重复斜杠 | 不自动合并；静态模板不能声明空段，catch-all 保留捕获中的斜杠 |
+| 尾斜杠 | `/a` 与 `/a/` 严格区分，不自动重定向；模板不能声明静态尾空段，末尾 catch-all 可接收 |
 | Priority | 仅在固定语义层级相同时比较；同 priority 仍歧义则拒绝发布 |
 | Upstream Host | 默认改为 target host；只有路由显式 `preserveHost` 时保留原 Host |
 

@@ -1,5 +1,7 @@
 # 当前架构与代码审查（2026-09-27）
 
+> 后续维护：Router 的 Host 线性查询、非法 Host 回退及差分覆盖已在 [2026-09-29 Router 维护](11-router-maintenance.md)中调整。本文保留原始基线与证据；R1–R5 不属于该次 Router 修改范围，仍未修复。
+
 ## 范围与结论
 
 审查基线为 `63d073dac246eef8890c9c0d443f366a146b0097`，初始工作区干净。阅读生产代码、测试、配置、Makefile、CI 与 docs/01–09。当前实现是 **Phase 5 静态数据面**：单 Go Module、双 HTTP Server、启动时编译路由和 upstream、共享 Transport、全局中间件、zap 与私有 Prometheus Registry。模块职责总体清楚，路由配置和 endpoint 原子运行状态分离；控制面、动态配置、实际限流和主动健康检查尚未实现。

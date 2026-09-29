@@ -9,30 +9,32 @@ import (
 )
 
 // NormalizeHost 去除端口和单个尾点，并将 ASCII 字母转为小写
-// 非法 Host 返回空串；此时仍可能匹配任意 Host 路由
-func NormalizeHost(rawHost string) string {
+// 空输入表示没有 authority，只能进入 any-host；非空非法输入返回独立错误
+// 请求沿用配置的 DNS/IP 子集约束，不接受 URI reg-name 的任意字符
+func NormalizeHost(rawHost string) (string, *MatchError) {
 	if rawHost == "" {
-		return ""
+		return "", nil
 	}
 	hostname, err := splitAuthorityHost(rawHost)
 	if err != nil {
-		return ""
+		return "", &MatchError{Code: MatchErrIllegalHost, Message: "Host authority 格式非法"}
 	}
 	normalized := normalizeHostname(hostname)
-	if _, err := netip.ParseAddr(normalized); err == nil {
-		return normalized
+	// authority 拆分已验证含冒号的 IPv6；IPv4 的数字与点也满足下方 DNS 字符校验
+	if strings.ContainsRune(normalized, ':') {
+		return normalized, nil
 	}
 	if validateDNSName(normalized) != nil {
-		return ""
+		return "", &MatchError{Code: MatchErrIllegalHost, Message: "Host 不是合法 DNS 名称或 IP 地址"}
 	}
-	return normalized
+	return normalized, nil
 }
 
 // ParseHostPattern 解析配置中的 host 字段
 //
-// 支持空 Host、exact Host 和前缀形式的单层 wildcard（*.example.com）。配置侧
-// 严格拒绝非 ASCII、非法端口、多个尾点、空 DNS label 及非前缀形式的 *，确保
-// 所有归一化在启动阶段完成，请求热路径只做确定性比较
+// 支持空 Host、exact Host 和前缀形式的单层 wildcard（*.example.com）
+// 配置侧严格拒绝非 ASCII、非法端口、多个尾点、空 DNS label 及非前缀形式的 *
+// 确保所有归一化在启动阶段完成，请求热路径只做确定性比较
 func ParseHostPattern(raw string) (hostPattern, error) {
 	// 配置侧严格解析：空值是任意 Host，非空值必须能在启动时确定匹配类型
 	raw = strings.TrimSpace(raw)
@@ -146,13 +148,20 @@ func validatePort(raw string) error {
 
 func normalizeHostname(hostname string) string {
 	hostname = strings.TrimSuffix(hostname, ".")
-	bytes := []byte(hostname)
-	for i, c := range bytes {
-		if c >= 'A' && c <= 'Z' {
-			bytes[i] = c + ('a' - 'A')
+	// 常见的小写 Host 直接复用输入，仅在出现 ASCII 大写时创建副本
+	for i := 0; i < len(hostname); i++ {
+		if hostname[i] < 'A' || hostname[i] > 'Z' {
+			continue
 		}
+		bytes := []byte(hostname)
+		for j := i; j < len(bytes); j++ {
+			if bytes[j] >= 'A' && bytes[j] <= 'Z' {
+				bytes[j] += 'a' - 'A'
+			}
+		}
+		return string(bytes)
 	}
-	return string(bytes)
+	return hostname
 }
 
 func validateDNSName(hostname string) error {

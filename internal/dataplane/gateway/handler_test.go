@@ -460,3 +460,92 @@ func assertErrorResponse(t *testing.T, rec *httptest.ResponseRecorder, wantStatu
 		t.Errorf("错误 code = %q, want %q", body.Code, wantCode)
 	}
 }
+
+func TestGatewayRejectsIllegalHostBeforeForwarding(t *testing.T) {
+	r := mustCompileRouter(t, []router.CompileInput{{RouteID: "any", Path: "/*path", Upstream: "api"}})
+	handler := middleware.NewPublicHandler(NewGatewayHandler(r, nil), middleware.Options{RequestIDGenerator: func() string { return "invalid-host" }})
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/users", nil)
+	req.Host = "foo_bar.example.com"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	assertErrorResponse(t, rec, http.StatusBadRequest, "BAD_REQUEST")
+	if rec.Header().Get("X-Request-ID") != "invalid-host" {
+		t.Fatal("Host 错误缺少 Request ID")
+	}
+}
+
+func TestGatewayMethodNotAllowed(t *testing.T) {
+	r := mustCompileRouter(t, []router.CompileInput{{RouteID: "users", Method: "GET", Path: "/users/:id", Upstream: "api"}})
+	handler := middleware.NewPublicHandler(NewGatewayHandler(r, nil), middleware.Options{RequestIDGenerator: func() string { return "method-error" }})
+	for _, method := range []string{http.MethodPost, http.MethodOptions} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(method, "http://gateway.local/users/42", nil))
+		assertErrorResponse(t, rec, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
+		if rec.Header().Get("Allow") != "GET, HEAD" || rec.Header().Get("X-Request-ID") != "method-error" {
+			t.Fatalf("响应头=%v", rec.Header())
+		}
+	}
+}
+
+// TestGatewayRouterHTTPContracts 通过真实 HTTP Server 检查 400/404/405 及 OPTIONS/HEAD 转发
+func TestGatewayRouterHTTPContracts(t *testing.T) {
+	r := mustCompileRouter(t, []router.CompileInput{
+		{RouteID: "users", Method: "GET", Path: "/users/:id", Upstream: "api"},
+		{RouteID: "options", Method: "OPTIONS", Path: "/options", Upstream: "api"},
+		{RouteID: "any", Path: "/any", Upstream: "api"},
+	})
+	rt := &captureRoundTripper{requests: make(chan capturedRequest, 8)}
+	base := NewGatewayHandler(r, map[string]*upstream.CompiledUpstream{"api": mustCompileUpstream(t, "api", []string{"http://api.internal"}, upstream.ProxyModeDefault, rt)})
+	server := httptest.NewServer(middleware.NewPublicHandler(base, middleware.Options{RequestIDGenerator: func() string { return "router-http" }}))
+	t.Cleanup(server.Close)
+	for _, tc := range []struct {
+		host, method, path string
+		status             int
+		allow              string
+	}{
+		{"api.test", "POST", "/users/42", 405, "GET, HEAD"},
+		{"api.test", "OPTIONS", "/users/42", 405, "GET, HEAD"},
+		{"api.test", "HEAD", "/users/42", 200, ""},
+		{"api.test", "OPTIONS", "/options", 200, ""},
+		{"api.test", "OPTIONS", "/any", 200, ""},
+		{"api.test", "DELETE", "/missing", 404, ""},
+		{"bad_host", "GET", "/any", 400, ""},
+		{"api.test", "GET", "/users/%2F", 400, ""},
+	} {
+		t.Run(tc.host+"/"+tc.method+tc.path, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, server.URL+tc.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Host = tc.host
+			res, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, err := io.ReadAll(res.Body)
+			res.Body.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.StatusCode != tc.status || res.Header.Get("Allow") != tc.allow || res.Header.Get("X-Request-ID") != "router-http" {
+				t.Fatalf("响应=%d %v body=%s", res.StatusCode, res.Header, body)
+			}
+			if tc.status == 200 {
+				captured := <-rt.requests
+				if captured.method != tc.method {
+					t.Fatalf("转发方法=%q want %q", captured.method, tc.method)
+				}
+				return
+			}
+			var errorBody response.ErrorBody
+			if err := json.Unmarshal(body, &errorBody); err != nil || errorBody.RequestID != "router-http" {
+				t.Fatalf("错误响应=%s: %v", body, err)
+			}
+			select {
+			case unexpected := <-rt.requests:
+				t.Fatalf("错误请求被转发: %+v", unexpected)
+			default:
+			}
+		})
+	}
+}

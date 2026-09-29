@@ -4,9 +4,10 @@ import "testing"
 
 func TestNormalizeHost(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  string
+		name    string
+		input   string
+		want    string
+		wantErr bool
 	}{
 		{name: "空", input: "", want: ""},
 		{name: "简单", input: "api.example.com", want: "api.example.com"},
@@ -17,15 +18,19 @@ func TestNormalizeHost(t *testing.T) {
 		{name: "IPv6 无端口带括号", input: "[2001:DB8::1]", want: "2001:db8::1"},
 		{name: "IPv6 带端口", input: "[2001:DB8::1]:8443", want: "2001:db8::1"},
 		{name: "IPv6 无括号无端口", input: "2001:DB8::1", want: "2001:db8::1"},
-		{name: "非法端口归一化为空", input: "api.example.com:bad", want: ""},
-		{name: "多个尾点归一化为空", input: "api.example.com..", want: ""},
-		{name: "非法 DNS 字符归一化为空", input: "foo_bar.example.com", want: ""},
-		{name: "label 前连字符归一化为空", input: "-bad.example.com", want: ""},
-		{name: "label 后连字符归一化为空", input: "bad-.example.com", want: ""},
+		{name: "非法端口返回错误", input: "api.example.com:bad", want: "", wantErr: true},
+		{name: "多个尾点返回错误", input: "api.example.com..", want: "", wantErr: true},
+		{name: "非法 DNS 字符返回错误", input: "foo_bar.example.com", want: "", wantErr: true},
+		{name: "label 前连字符返回错误", input: "-bad.example.com", want: "", wantErr: true},
+		{name: "label 后连字符返回错误", input: "bad-.example.com", want: "", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NormalizeHost(tt.input); got != tt.want {
+			got, err := NormalizeHost(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NormalizeHost 错误 = %v", err)
+			}
+			if got != tt.want {
 				t.Errorf("NormalizeHost(%q) = %q, want %q", tt.input, got, tt.want)
 			}
 		})
@@ -100,7 +105,7 @@ func TestMatchHost(t *testing.T) {
 		{name: "通配不匹配非法字符", pattern: "*.example.com", request: "foo_bar.example.com", want: false},
 		{name: "通配不匹配 label 前连字符", pattern: "*.example.com", request: "-bad.example.com", want: false},
 		{name: "通配不匹配 label 后连字符", pattern: "*.example.com", request: "bad-.example.com", want: false},
-		{name: "any 仍接收非法 host", pattern: "", request: "foo_bar.example.com", want: true},
+		{name: "any 拒绝非法 host", pattern: "", request: "foo_bar.example.com", want: false},
 		{name: "大小写归一化后匹配", pattern: "api.example.com", request: "API.Example.com", want: true},
 		{name: "端口剥离后匹配", pattern: "api.example.com", request: "api.example.com:8080", want: true},
 		{name: "尾点剥离后匹配", pattern: "api.example.com", request: "api.example.com.", want: true},
@@ -112,7 +117,8 @@ func TestMatchHost(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseHostPattern 错误: %v", err)
 			}
-			if got := p.MatchHost(NormalizeHost(tt.request)); got != tt.want {
+			host, hostErr := NormalizeHost(tt.request)
+			if got := hostErr == nil && p.MatchHost(host); got != tt.want {
 				t.Errorf("MatchHost(%q, %q) = %v, want %v", tt.pattern, tt.request, got, tt.want)
 			}
 		})

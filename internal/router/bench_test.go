@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -125,4 +126,82 @@ func generateBenchmarkRoutes(count int) []CompileInput {
 		}
 	}
 	return routes
+}
+
+// BenchmarkHostSelector 将 Host 数量与 Path 数量分开，最末 exact 可暴露线性扫描成本
+// wildcard 使用不同后缀；fallback 有 any 路由，miss 没有 any 路由
+func BenchmarkHostSelector(b *testing.B) {
+	for _, size := range []int{10, 100, 1000, 10000} {
+		for _, scenario := range []string{"exact", "wildcard", "fallback", "miss"} {
+			b.Run(fmt.Sprintf("hosts_%d/%s", size, scenario), func(b *testing.B) {
+				routes := make([]CompileInput, 0, size+1)
+				for i := range size {
+					host := fmt.Sprintf("h%05d.example.com", i)
+					if scenario == "wildcard" {
+						host = fmt.Sprintf("*.h%05d.example.com", i)
+					}
+					routes = append(routes, CompileInput{RouteID: host, Host: host, Method: "GET", Path: "/users/:id", Upstream: "mock"})
+				}
+				host := fmt.Sprintf("h%05d.example.com", size-1)
+				if scenario == "wildcard" {
+					host = "api." + host
+				}
+				if scenario == "fallback" || scenario == "miss" {
+					host = "unmatched.example.org"
+				}
+				if scenario == "fallback" {
+					routes = append(routes, CompileInput{RouteID: "any", Method: "GET", Path: "/users/:id", Upstream: "mock"})
+				}
+				benchmarkMatchRequest(b, routes, host, "GET", []string{"users", "42"}, scenario != "miss")
+			})
+		}
+	}
+}
+
+// BenchmarkRouteMatrix 覆盖同一规模下的静态、动态、深路径与 Method 分支
+func BenchmarkRouteMatrix(b *testing.B) {
+	for _, size := range []int{10, 1000, 10000} {
+		for _, test := range []struct {
+			name, pattern, path, routeMethod, requestMethod string
+			hit                                             bool
+		}{
+			{"static", "/api/v1/users/profile", "/api/v1/users/profile", "GET", "GET", true},
+			{"param", "/api/:tenant/users/:user", "/api/acme/users/42", "GET", "GET", true},
+			{"multi_param", "/api/:tenant/users/:user/orders/:order", "/api/acme/users/42/orders/7", "GET", "GET", true},
+			{"catch_all", "/static/*path", "/static/a/b/c", "GET", "GET", true},
+			{"fan_out", "/target", "/target", "GET", "GET", true},
+			{"depth_5", "/a/b/c/d/e", "/a/b/c/d/e", "GET", "GET", true},
+			{"depth_10", "/a/b/c/d/e/f/g/h/i/j", "/a/b/c/d/e/f/g/h/i/j", "GET", "GET", true},
+			{"depth_20", "/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t", "/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t", "GET", "GET", true},
+			{"post", "/users/:id", "/users/42", "POST", "POST", true},
+			{"head_fallback", "/users/:id", "/users/42", "GET", "HEAD", true},
+			{"any_method", "/users/:id", "/users/42", "", "PATCH", true},
+			{"method_miss", "/users/:id", "/users/42", "GET", "POST", false},
+		} {
+			b.Run(fmt.Sprintf("routes_%d/%s", size, test.name), func(b *testing.B) {
+				routes := make([]CompileInput, 0, size)
+				for i := 0; i < size-1; i++ {
+					routes = append(routes, CompileInput{RouteID: fmt.Sprint(i), Method: test.routeMethod, Path: fmt.Sprintf("/svc%d", i), Upstream: "mock"})
+				}
+				routes = append(routes, CompileInput{RouteID: "target", Method: test.routeMethod, Path: test.pattern, Upstream: "mock"})
+				benchmarkMatchRequest(b, routes, "api.example.com", test.requestMethod, strings.Split(test.path[1:], "/"), test.hit)
+			})
+		}
+	}
+}
+
+func benchmarkMatchRequest(b *testing.B, routes []CompileInput, host, method string, segments []string, hit bool) {
+	b.Helper()
+	r, err := Compile(routes)
+	if err != nil {
+		b.Fatal(err)
+	}
+	if result, _ := r.Match(host, method, segments); (result != nil) != hit {
+		b.Fatal("基准场景未得到预期匹配结果")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = r.Match(host, method, segments)
+	}
 }

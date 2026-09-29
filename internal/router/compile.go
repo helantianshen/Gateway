@@ -15,7 +15,7 @@ type CompileInput struct {
 	Host string
 	// Method 是路由的 HTTP 方法（空表示任意 Method）
 	Method string
-	// Path 是路由的路径模式（支持 static/:param/*catchAll）
+	// Path 是已解码路径模板（支持 static/:param/*catchAll），不解码其中的 %XX
 	Path string
 	// Upstream 是路由引用的 upstream ID
 	Upstream string
@@ -29,13 +29,14 @@ type CompileInput struct {
 //
 // 编译后的树完全不可变，可被并发安全读取
 type Router struct {
-	// hostGroups 已按 exact > wildcard > any 和模式值稳定排序
-	hostGroups []*hostGroup
+	// 三类索引仅在编译期写入；请求按 exact → wildcard → any 读取最多三个候选
+	exactHosts    map[string]*hostGroup
+	wildcardHosts map[string]*hostGroup
+	anyHost       *hostGroup
 }
 
 // hostGroup 将共享相同 host 模式的路由组织在一起
 type hostGroup struct {
-	pattern hostPattern
 	// methodTrees 是编译完成后不再修改的查询表，支持显式方法、HEAD 回退和 any
 	methodTrees map[string]*methodTree
 }
@@ -77,7 +78,7 @@ func Compile(routes []CompileInput) (*Router, error) {
 	// 先按 Host 再按 Method 分组；每个 Method 组独立检测冲突并冻结路由树
 	// 最终 hostGroup 不保留 builder 或 parsedRoute 指针
 	builders := groupByHost(parsed)
-	hostGroups := make([]*hostGroup, 0, len(builders))
+	compiled := &Router{exactHosts: make(map[string]*hostGroup), wildcardHosts: make(map[string]*hostGroup)}
 	for _, builder := range builders {
 		methods := make(map[string][]*parsedRoute)
 		for _, pr := range builder.routes {
@@ -85,7 +86,6 @@ func Compile(routes []CompileInput) (*Router, error) {
 		}
 
 		group := &hostGroup{
-			pattern:     builder.pattern,
 			methodTrees: make(map[string]*methodTree, len(methods)),
 		}
 		for method, methodRoutes := range methods {
@@ -95,23 +95,17 @@ func Compile(routes []CompileInput) (*Router, error) {
 			}
 			group.methodTrees[method] = &methodTree{root: tree}
 		}
-		hostGroups = append(hostGroups, group)
+		switch builder.pattern.kind {
+		case hostExact:
+			compiled.exactHosts[builder.pattern.value] = group
+		case hostWildcard:
+			compiled.wildcardHosts[builder.pattern.value] = group
+		case hostAny:
+			compiled.anyHost = group
+		}
 	}
 
-	// 匹配按 Host specificity 从高到低遍历；同等级按模式值固定顺序
-	// 排序发生在编译期，请求热路径无需复制或重新排序分组
-	sort.Slice(hostGroups, func(i, j int) bool {
-		a, b := hostGroups[i].pattern, hostGroups[j].pattern
-		if a.Specificity() != b.Specificity() {
-			return a.Specificity() > b.Specificity()
-		}
-		if a.kind != b.kind {
-			return a.kind < b.kind
-		}
-		return a.value < b.value
-	})
-
-	return &Router{hostGroups: hostGroups}, nil
+	return compiled, nil
 }
 
 // parsedRoute 是解析后的路由
@@ -189,7 +183,7 @@ func groupByHost(routes []*parsedRoute) []*hostGroupBuilder {
 		}
 	}
 
-	// 按固定顺序返回，确保不依赖插入顺序
+	// 按首次出现的分组顺序构建；运行时仅用 Host 索引查找，不依赖构建顺序
 	result := make([]*hostGroupBuilder, 0, len(groupKeys))
 	for _, key := range groupKeys {
 		result = append(result, groups[key])

@@ -6,15 +6,18 @@ import (
 )
 
 // Match 按 Host、Method 和路径优先级匹配已解码的路径段
-// 路径安全由调用方先通过 ParsePath 检查；本函数只返回 MatchErrNoRoute
+// 路径安全由调用方先通过 ParsePath 检查；Host 必须先验证才能进入任意 Host 路由
 func (r *Router) Match(host, method string, pathSegments []string) (*MatchResult, *MatchError) {
-	normalizedHost := NormalizeHost(host)
+	normalizedHost, hostErr := NormalizeHost(host)
+	if hostErr != nil {
+		return nil, hostErr
+	}
 	upperMethod := strings.ToUpper(method)
 
-	// hostGroups 已在 Compile/freeze 阶段按 exact > wildcard > any 排序
-	// 请求热路径只读遍历，不复制或排序任何配置结构
-	for _, hg := range r.hostGroups {
-		if !hg.pattern.MatchHost(normalizedHost) {
+	// 高优先级 Host 没有匹配 Method/Path 时，仍继续尝试低优先级候选
+	candidates := r.hostCandidates(normalizedHost)
+	for _, hg := range candidates {
+		if hg == nil {
 			continue
 		}
 
@@ -35,7 +38,72 @@ func (r *Router) Match(host, method string, pathSegments []string) (*MatchResult
 		}
 	}
 
-	return nil, &MatchError{Code: MatchErrNoRoute, Message: "没有路由匹配 " + method + " " + strings.Join(pathSegments, "/")}
+	// 只有正常匹配全部失败才探测其他方法，避免影响成功请求的路径
+	methods, _ := collectAllowedMethods(candidates, pathSegments, upperMethod)
+	if len(methods) > 0 {
+		return nil, &MatchError{Code: MatchErrMethodNotAllowed, Message: "该路径不支持请求方法", AllowedMethods: methods}
+	}
+	return nil, &MatchError{Code: MatchErrNoRoute, Message: "没有匹配的路由"}
+}
+
+// AllowedMethods 查询已解码路径在所有匹配 Host 层级中可接受的方法
+// methods 按字典序去重，GET 包含 HEAD；any 表示任意方法，此时 methods 为空
+// 不存在路径时返回 MatchErrNoRoute，非法 Host 返回 MatchErrIllegalHost；不自动添加 OPTIONS
+func (r *Router) AllowedMethods(host string, pathSegments []string) (methods []string, any bool, err *MatchError) {
+	normalized, hostErr := NormalizeHost(host)
+	if hostErr != nil {
+		return nil, false, hostErr
+	}
+	methods, any = collectAllowedMethods(r.hostCandidates(normalized), pathSegments, "")
+	if len(methods) == 0 && !any {
+		return nil, false, &MatchError{Code: MatchErrNoRoute, Message: "没有匹配的路由"}
+	}
+	return methods, any, nil
+}
+
+// collectAllowedMethods 只读扫描候选中的 Method Tree，不跨到其他 Host
+// attemptedMethod 非空时，跳过 Match 已经尝试失败的显式、HEAD 回退与 any 树
+// 不限制方法的路径代表任意 token，无法用一个有限的 Allow 列表表达
+func collectAllowedMethods(candidates [3]*hostGroup, path []string, attemptedMethod string) ([]string, bool) {
+	var methods []string
+	for _, group := range candidates {
+		if group == nil {
+			continue
+		}
+		for method, tree := range group.methodTrees {
+			if attemptedMethod != "" && (method == attemptedMethod || method == "" || attemptedMethod == "HEAD" && method == "GET") {
+				continue
+			}
+			if matchTree(tree, path) == nil {
+				continue
+			}
+			if method == "" {
+				return nil, true
+			}
+			methods = append(methods, method)
+			if method == "GET" {
+				methods = append(methods, "HEAD")
+			}
+		}
+	}
+	sort.Strings(methods)
+	unique := methods[:0]
+	for _, method := range methods {
+		if len(unique) == 0 || unique[len(unique)-1] != method {
+			unique = append(unique, method)
+		}
+	}
+	return unique, false
+}
+
+// hostCandidates 按固定优先级返回至多三个 Host 组，不分配候选切片
+// 只去除第一个 label，因而 *.example.com 不会匹配 a.b.example.com
+func (r *Router) hostCandidates(host string) [3]*hostGroup {
+	candidates := [3]*hostGroup{r.exactHosts[host], nil, r.anyHost}
+	if dot := strings.IndexByte(host, '.'); dot > 0 {
+		candidates[1] = r.wildcardHosts[host[dot+1:]]
+	}
+	return candidates
 }
 
 // matchMethodTree 在指定 Host 组中查找一个 Method tree；不存在时直接返回 nil
@@ -44,12 +112,21 @@ func matchMethodTree(group *hostGroup, method string, pathSegments []string) *Ma
 	if !exists {
 		return nil
 	}
-	return matchPath(tree.root, pathSegments, nil)
+	return matchTree(tree, pathSegments)
+}
+
+// matchTree 为常见路径提供八个栈上参数槽位；更深的参数路径由 append 正常扩容
+// 捕获只在本次递归中使用，返回结果将值复制进独立 map，不持有缓冲区切片
+func matchTree(tree *methodTree, segments []string) *MatchResult {
+	var values [8]string
+	return matchPath(tree.root, segments, values[:0])
 }
 
 // matchPath 在 Radix Tree 中递归匹配路径段
 //
 // 子节点已按优先级排序（static > param > catchAll），因此返回第一个匹配结果
+// paramValues 的长度是当前分支深度；失败返回后，兄弟分支从父切片长度继续追加
+// 只有成功叶子会构建独立结果，因此回溯覆盖缓冲区不会污染已返回的参数
 // paramValues 只记录参数值，不绑定节点上的参数名；同一结构分支可能服务于
 // `/:id` 与 `/:name`，最终必须按命中路由自己的 paramNames 构造 Params
 func matchPath(n *node, segments []string, paramValues []string) *MatchResult {
@@ -75,7 +152,7 @@ func matchPath(n *node, segments []string, paramValues []string) *MatchResult {
 		// catch-all 可匹配空剩余；精确终点已在上方优先返回
 		for _, child := range n.children {
 			if child.segType == segCatchAll && len(child.routes) > 0 {
-				return buildMatchResult(&child.routes[0], appendParamValue(paramValues, ""))
+				return buildMatchResult(&child.routes[0], append(paramValues, ""))
 			}
 		}
 		return nil
@@ -98,14 +175,14 @@ func matchPath(n *node, segments []string, paramValues []string) *MatchResult {
 		switch child.segType {
 		case segParam:
 			if segments[0] != "" {
-				values := appendParamValue(paramValues, segments[0])
+				values := append(paramValues, segments[0])
 				if result := matchPath(child, segments[1:], values); result != nil {
 					return result
 				}
 			}
 		case segCatchAll:
 			if len(child.routes) > 0 {
-				values := appendParamValue(paramValues, strings.Join(segments, "/"))
+				values := append(paramValues, strings.Join(segments, "/"))
 				return buildMatchResult(&child.routes[0], values)
 			}
 		}
@@ -181,11 +258,4 @@ func buildMatchResult(route *compiledRoute, paramValues []string) *MatchResult {
 		Params:       params,
 		PreserveHost: route.preserveHost,
 	}
-}
-
-// appendParamValue 复制并追加一个参数值，避免递归分支共享底层数组后相互覆盖
-func appendParamValue(values []string, value string) []string {
-	result := make([]string, len(values), len(values)+1)
-	copy(result, values)
-	return append(result, value)
 }

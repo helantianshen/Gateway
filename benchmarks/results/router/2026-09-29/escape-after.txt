@@ -1,0 +1,89 @@
+internal/router/host.go:144:20: &errors.errorString{...} escapes to heap in validatePort:
+internal/router/host.go:144:20: &errors.errorString{...} escapes to heap
+internal/router/host.go:100:25: &errors.errorString{...} escapes to heap in splitAuthorityHost:
+internal/router/host.go:104:25: &errors.errorString{...} escapes to heap in splitAuthorityHost:
+internal/router/host.go:111:25: &errors.errorString{...} escapes to heap in splitAuthorityHost:
+internal/router/host.go:126:25: &errors.errorString{...} escapes to heap in splitAuthorityHost:
+internal/router/host.go:135:25: &errors.errorString{...} escapes to heap in splitAuthorityHost:
+internal/router/host.go:100:25: &errors.errorString{...} escapes to heap
+internal/router/host.go:104:25: &errors.errorString{...} escapes to heap
+internal/router/host.go:111:25: &errors.errorString{...} escapes to heap
+internal/router/host.go:126:25: &errors.errorString{...} escapes to heap
+internal/router/host.go:135:25: &errors.errorString{...} escapes to heap
+internal/router/host.go:162:17: string(bytes) escapes to heap in normalizeHostname:
+internal/router/host.go:162:17: string(bytes) escapes to heap
+internal/router/host.go:169:20: &errors.errorString{...} escapes to heap in validateDNSName:
+internal/router/host.go:178:21: &errors.errorString{...} escapes to heap in validateDNSName:
+internal/router/host.go:181:21: &errors.errorString{...} escapes to heap in validateDNSName:
+internal/router/host.go:188:21: &errors.errorString{...} escapes to heap in validateDNSName:
+internal/router/host.go:191:21: &errors.errorString{...} escapes to heap in validateDNSName:
+internal/router/host.go:169:20: &errors.errorString{...} escapes to heap
+internal/router/host.go:178:21: &errors.errorString{...} escapes to heap
+internal/router/host.go:181:21: &errors.errorString{...} escapes to heap
+internal/router/host.go:188:21: &errors.errorString{...} escapes to heap
+internal/router/host.go:191:21: &errors.errorString{...} escapes to heap
+internal/router/host.go:45:25: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:50:25: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:53:25: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:57:25: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:64:26: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:67:26: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:70:26: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:73:26: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:80:25: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:84:26: &hostParseError{...} escapes to heap in ParseHostPattern:
+internal/router/host.go:45:25: &hostParseError{...} escapes to heap
+internal/router/host.go:50:25: &hostParseError{...} escapes to heap
+internal/router/host.go:53:25: &hostParseError{...} escapes to heap
+internal/router/host.go:57:25: &hostParseError{...} escapes to heap
+internal/router/host.go:64:26: &hostParseError{...} escapes to heap
+internal/router/host.go:67:26: &hostParseError{...} escapes to heap
+internal/router/host.go:70:26: &hostParseError{...} escapes to heap
+internal/router/host.go:73:26: &hostParseError{...} escapes to heap
+internal/router/host.go:80:25: &hostParseError{...} escapes to heap
+internal/router/host.go:84:26: &hostParseError{...} escapes to heap
+internal/router/host.go:20:14: &MatchError{...} escapes to heap in NormalizeHost:
+internal/router/host.go:28:14: &MatchError{...} escapes to heap in NormalizeHost:
+internal/router/host.go:20:14: &MatchError{...} escapes to heap
+internal/router/host.go:28:14: &MatchError{...} escapes to heap
+internal/router/host.go:233:55: "host 模式解析失败 (" + e.input + "): " + e.reason escapes to heap in (*hostParseError).Error:
+internal/router/host.go:233:55: "host 模式解析失败 (" + e.input + "): " + e.reason escapes to heap
+internal/router/match.go:101:33: host does not escape
+internal/router/match.go:220:24: prefix does not escape
+internal/router/match.go:220:39: segments does not escape
+internal/router/match.go:195:40: segment does not escape
+internal/router/match.go:155:28: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:186:28: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:150:27: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:186:28: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:155:28: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:150:27: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:150:27: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:150:27: &MatchResult{...} escapes to heap
+internal/router/match.go:155:53: append does not escape
+internal/router/match.go:155:28: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:155:28: &MatchResult{...} escapes to heap
+internal/router/match.go:178:21: append does not escape
+internal/router/match.go:185:21: append does not escape
+internal/router/match.go:186:28: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:186:28: &MatchResult{...} escapes to heap
+internal/router/match.go:110:22: group does not escape
+internal/router/match.go:110:40: method does not escape
+internal/router/match.go:93:19: append(unique, method) escapes to heap in collectAllowedMethods:
+internal/router/match.go:83:20: append(methods, method) escapes to heap in collectAllowedMethods:
+internal/router/match.go:85:21: append(methods, "HEAD") escapes to heap in collectAllowedMethods:
+internal/router/match.go:67:69: attemptedMethod does not escape
+internal/router/match.go:83:20: append escapes to heap
+internal/router/match.go:85:21: append escapes to heap
+internal/router/match.go:93:19: append escapes to heap
+internal/router/match.go:44:15: &MatchError{...} escapes to heap in (*Router).Match:
+internal/router/match.go:46:14: &MatchError{...} escapes to heap in (*Router).Match:
+internal/router/match.go:10:30: method does not escape
+internal/router/match.go:44:15: &MatchError{...} escapes to heap
+internal/router/match.go:46:14: &MatchError{...} escapes to heap
+internal/router/match.go:59:22: &MatchError{...} escapes to heap in (*Router).AllowedMethods:
+internal/router/match.go:59:22: &MatchError{...} escapes to heap
+internal/router/match.go:254:9: &MatchResult{...} escapes to heap in buildMatchResult:
+internal/router/match.go:245:16: make(map[string]string, len(route.paramNames)) escapes to heap in buildMatchResult:
+internal/router/match.go:245:16: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:254:9: &MatchResult{...} escapes to heap

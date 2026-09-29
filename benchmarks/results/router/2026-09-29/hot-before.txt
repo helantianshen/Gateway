@@ -1,0 +1,26 @@
+goos: linux
+goarch: amd64
+pkg: github.com/helantianshen/gateway/internal/router
+cpu: AMD Ryzen 7 7735H with Radeon Graphics
+BenchmarkMatch/routes_10/hit-4         	 5251776	       226.1 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/hit-4         	 5206870	       228.8 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/hit-4         	 5316471	       230.2 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10/miss-4        	 7238900	       165.5 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10/miss-4        	 6883388	       171.1 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10/miss-4        	 7125788	       166.0 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/hit-4       	 4186291	       285.3 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/hit-4       	 4214802	       285.9 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/hit-4       	 4147125	       289.7 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_1000/miss-4      	 5635818	       211.3 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/miss-4      	 5603412	       212.0 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_1000/miss-4      	 5601837	       213.4 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/hit-4      	 3690752	       325.4 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/hit-4      	 3639272	       326.1 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/hit-4      	 3604430	       337.2 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatch/routes_10000/miss-4     	 4870288	       242.3 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/miss-4     	 4973484	       244.6 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatch/routes_10000/miss-4     	 4918156	       243.9 ns/op	      88 B/op	       3 allocs/op
+BenchmarkMatchParallel-4               	10280082	       119.8 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchParallel-4               	10202658	       115.8 ns/op	     416 B/op	       4 allocs/op
+BenchmarkMatchParallel-4               	10304448	       115.8 ns/op	     416 B/op	       4 allocs/op
+PASS

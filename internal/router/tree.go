@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // buildNode 是编译阶段唯一可变的树节点
@@ -38,9 +40,18 @@ type pathSegment struct {
 	segType segmentType
 }
 
-// parsePathPattern 接受绝对路径中的 static、:param 和末尾 *catchAll 段
+// parsePathPattern 接受已解码的绝对路径模板，不对 %XX 做 URL 解码
+// static 中的 %、?、# 是字面字符，Unicode 保留原值；请求侧需使用对应编码
 // 参数名需以字母开头且仅含字母、数字和下划线，同一模式中不得重复
 func parsePathPattern(pattern string) ([]pathSegment, error) {
+	if !utf8.ValidString(pattern) || strings.ContainsRune(pattern, '\\') {
+		return nil, fmt.Errorf("路径模板必须是有效 UTF-8，且不能包含反斜杠")
+	}
+	for _, char := range pattern {
+		if unicode.IsControl(char) {
+			return nil, fmt.Errorf("路径模板不能包含控制字符")
+		}
+	}
 	if !strings.HasPrefix(pattern, "/") {
 		return nil, fmt.Errorf("路径模式必须以 / 开头")
 	}
@@ -94,6 +105,9 @@ func parsePathPattern(pattern string) ([]pathSegment, error) {
 			segments = append(segments, pathSegment{value: name, segType: segCatchAll})
 
 		default:
+			if raw == "." || raw == ".." {
+				return nil, fmt.Errorf("路径模板不能包含 dot segment")
+			}
 			segments = append(segments, pathSegment{value: raw, segType: segStatic})
 		}
 	}

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	router "github.com/helantianshen/gateway/internal/router"
 )
@@ -62,7 +64,12 @@ type refSegment struct {
 
 func newReferenceMatcher(inputs []router.CompileInput) (*referenceMatcher, error) {
 	routes := make([]referenceRoute, 0, len(inputs))
+	ids := map[string]bool{}
 	for i, input := range inputs {
+		if strings.TrimSpace(input.RouteID) == "" || strings.TrimSpace(input.Upstream) == "" || ids[input.RouteID] {
+			return nil, fmt.Errorf("非法或重复路由身份")
+		}
+		ids[input.RouteID] = true
 		kind, host, err := refParseHost(input.Host)
 		if err != nil {
 			return nil, fmt.Errorf("路由 %d host: %w", i, err)
@@ -87,6 +94,25 @@ func newReferenceMatcher(inputs []router.CompileInput) (*referenceMatcher, error
 			segments:     segments,
 		})
 	}
+	// 参考编译器逐对比较模式，不共享生产 conflict key 或树结构
+	for i, left := range routes {
+		for _, right := range routes[:i] {
+			if left.hostKind != right.hostKind || left.hostValue != right.hostValue || left.method != right.method || left.priority != right.priority || len(left.segments) != len(right.segments) {
+				continue
+			}
+			equal := true
+			for k, segment := range left.segments {
+				other := right.segments[k]
+				if segment.kind != other.kind || (segment.kind == refStatic && segment.value != other.value) {
+					equal = false
+					break
+				}
+			}
+			if equal {
+				return nil, fmt.Errorf("相同路径结构冲突")
+			}
+		}
+	}
 	return &referenceMatcher{routes: routes}, nil
 }
 
@@ -97,20 +123,28 @@ type refCandidate struct {
 }
 
 func (m *referenceMatcher) Match(host, method string, path []string) (*referenceResult, error) {
-	normalizedHost := refNormalizeRequestHost(host)
+	normalizedHost, hostErr := refNormalizeRequestHost(host)
+	if hostErr != nil {
+		return nil, &referenceError{kind: "host"}
+	}
 	requestMethod := strings.ToUpper(method)
 	candidates := make([]refCandidate, 0, len(m.routes))
+	allowed := map[string]bool{}
 
 	for i := range m.routes {
 		route := &m.routes[i]
 		if !refMatchHost(route, normalizedHost) {
 			continue
 		}
-		methodRank, ok := refMatchMethod(route.method, requestMethod)
+		params, ok := refMatchPath(route.segments, path)
 		if !ok {
 			continue
 		}
-		params, ok := refMatchPath(route.segments, path)
+		allowed[route.method] = true
+		if route.method == "GET" {
+			allowed["HEAD"] = true
+		}
+		methodRank, ok := refMatchMethod(route.method, requestMethod)
 		if !ok {
 			continue
 		}
@@ -118,7 +152,15 @@ func (m *referenceMatcher) Match(host, method string, path []string) (*reference
 	}
 
 	if len(candidates) == 0 {
-		return nil, nil
+		if len(allowed) == 0 {
+			return nil, &referenceError{kind: "no_route"}
+		}
+		methods := make([]string, 0, len(allowed))
+		for method := range allowed {
+			methods = append(methods, method)
+		}
+		sort.Strings(methods)
+		return nil, &referenceError{kind: "method", allowed: methods}
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		return refCompareCandidates(candidates[i], candidates[j]) > 0
@@ -157,7 +199,7 @@ func refParseHost(raw string) (refHostKind, string, error) {
 	host = refASCIILower(strings.TrimSuffix(host, "."))
 	if strings.HasPrefix(host, "*.") {
 		suffix := host[2:]
-		if suffix == "" || strings.Contains(suffix, "*") || !refValidDNSName(suffix) {
+		if suffix == "" || strings.Contains(suffix, "*") || !refValidDNSName(suffix) || net.ParseIP(suffix) != nil {
 			return 0, "", fmt.Errorf("非法 wildcard")
 		}
 		return refHostWildcard, suffix, nil
@@ -171,19 +213,29 @@ func refParseHost(raw string) (refHostKind, string, error) {
 	return refHostExact, host, nil
 }
 
-func refNormalizeRequestHost(raw string) string {
+type referenceError struct {
+	kind    string
+	allowed []string
+}
+
+func (e *referenceError) Error() string { return e.kind }
+
+func refNormalizeRequestHost(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
 	host, err := refSplitAuthority(raw)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	host = refASCIILower(strings.TrimSuffix(host, "."))
 	if _, err := netip.ParseAddr(host); err == nil {
-		return host
+		return host, nil
 	}
 	if !refValidDNSName(host) {
-		return ""
+		return "", fmt.Errorf("非法 Host")
 	}
-	return host
+	return host, nil
 }
 
 func refValidDNSName(host string) bool {
@@ -316,8 +368,13 @@ func refMatchMethod(routeMethod, requestMethod string) (int, bool) {
 }
 
 func refParsePath(pattern string) ([]refSegment, error) {
-	if pattern == "" {
-		return nil, fmt.Errorf("path 不能为空")
+	if !strings.HasPrefix(pattern, "/") || !utf8.ValidString(pattern) {
+		return nil, fmt.Errorf("非法绝对路径模板")
+	}
+	for _, char := range pattern {
+		if char == '\\' || unicode.IsControl(char) {
+			return nil, fmt.Errorf("非法路径字符")
+		}
 	}
 	pattern = strings.TrimPrefix(pattern, "/")
 	if pattern == "" {
@@ -327,8 +384,8 @@ func refParsePath(pattern string) ([]refSegment, error) {
 	segments := make([]refSegment, 0, len(rawSegments))
 	names := make(map[string]struct{})
 	for i, raw := range rawSegments {
-		if raw == "" {
-			return nil, fmt.Errorf("空路径段")
+		if raw == "" || raw == "." || raw == ".." {
+			return nil, fmt.Errorf("非法路径段")
 		}
 		segment := refSegment{kind: refStatic, value: raw}
 		if strings.HasPrefix(raw, ":") {
@@ -342,6 +399,12 @@ func refParsePath(pattern string) ([]refSegment, error) {
 		if segment.kind != refStatic {
 			if segment.value == "" {
 				return nil, fmt.Errorf("参数名为空")
+			}
+			for pos, char := range []byte(segment.value) {
+				letter := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
+				if !letter && (pos == 0 || !(char >= '0' && char <= '9' || char == '_')) {
+					return nil, fmt.Errorf("非法参数名")
+				}
 			}
 			if _, exists := names[segment.value]; exists {
 				return nil, fmt.Errorf("参数名重复")

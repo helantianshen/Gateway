@@ -127,15 +127,15 @@ func TestRouterConcurrentRead(t *testing.T) {
 
 func findMethodRoot(t *testing.T, r *Router, pattern hostPattern, method string) *node {
 	t.Helper()
-	for _, group := range r.hostGroups {
-		if group.pattern == pattern {
-			tree := group.methodTrees[method]
-			if tree == nil || tree.root == nil {
-				t.Fatalf("未找到 method tree: host=%+v method=%q", pattern, method)
-			}
-			return tree.root
-		}
+	group := r.anyHost
+	switch pattern.kind {
+	case hostExact:
+		group = r.exactHosts[pattern.value]
+	case hostWildcard:
+		group = r.wildcardHosts[pattern.value]
 	}
-	t.Fatalf("未找到 host group: %+v", pattern)
-	return nil
+	if group == nil || group.methodTrees[method] == nil {
+		t.Fatalf("未找到 method tree: host=%+v method=%q", pattern, method)
+	}
+	return group.methodTrees[method].root
 }

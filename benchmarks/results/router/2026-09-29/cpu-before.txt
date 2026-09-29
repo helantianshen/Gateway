@@ -1,0 +1,133 @@
+File: gateway-router-prealloc.test
+Build ID: 24f7912b343b4005f0fc392afb70979ef9c05f52
+Type: cpu
+Time: 2026-09-29 21:39:27 CST
+Duration: 1.85s, Total samples = 2.28s (123.36%)
+Showing nodes accounting for 1.99s, 87.28% of 2.28s total
+Dropped 73 nodes (cum <= 0.01s)
+      flat  flat%   sum%        cum   cum%
+     0.18s  7.89%  7.89%      1.36s 59.65%  github.com/helantianshen/gateway/internal/router.matchPath
+     0.18s  7.89% 15.79%      0.18s  7.89%  indexbytebody
+     0.13s  5.70% 21.49%      0.13s  5.70%  github.com/helantianshen/gateway/internal/router.validateDNSName
+     0.09s  3.95% 25.44%      0.14s  6.14%  runtime.mallocgcSmallScanNoHeaderSC5
+     0.08s  3.51% 28.95%      1.90s 83.33%  github.com/helantianshen/gateway/internal/router.(*Router).Match
+     0.07s  3.07% 32.02%      0.34s 14.91%  sort.Search (inline)
+     0.06s  2.63% 34.65%      0.36s 15.79%  runtime.mapassign_faststr
+     0.05s  2.19% 36.84%      0.05s  2.19%  cmpbody
+     0.05s  2.19% 39.04%      0.10s  4.39%  github.com/helantianshen/gateway/internal/router.normalizeHostname (inline)
+     0.05s  2.19% 41.23%      0.05s  2.19%  internal/runtime/maps.memHashAES
+     0.05s  2.19% 43.42%      0.05s  2.19%  runtime.mallocgcSmallScanNoHeaderSC2
+     0.04s  1.75% 45.18%      0.27s 11.84%  github.com/helantianshen/gateway/internal/router.findStaticChild.func1 (inline)
+     0.04s  1.75% 46.93%      0.04s  1.75%  internal/bytealg.IndexByteString
+     0.04s  1.75% 48.68%      0.08s  3.51%  internal/runtime/maps.(*Map).putSlotSmallFastStr
+     0.04s  1.75% 50.44%      0.04s  1.75%  runtime.memmove
+     0.03s  1.32% 51.75%      0.51s 22.37%  github.com/helantianshen/gateway/internal/router.buildMatchResult (inline)
+     0.03s  1.32% 53.07%      0.03s  1.32%  internal/bytealg.CountString
+     0.03s  1.32% 54.39%      0.11s  4.82%  net/netip.ParseAddr
+     0.03s  1.32% 55.70%      0.03s  1.32%  runtime.futex
+     0.03s  1.32% 57.02%      0.03s  1.32%  runtime.getMCache (inline)
+     0.03s  1.32% 58.33%      0.13s  5.70%  runtime.mallocgcSmallScanNoHeader
+     0.03s  1.32% 59.65%      0.03s  1.32%  runtime.memclrNoHeapPointers
+     0.03s  1.32% 60.96%      0.09s  3.95%  runtime.scanObjectsSmall
+     0.03s  1.32% 62.28%      0.04s  1.75%  runtime.tryDeferToSpanScan
+     0.03s  1.32% 63.60%      0.06s  2.63%  strings.Count
+     0.02s  0.88% 64.47%      0.42s 18.42%  github.com/helantianshen/gateway/internal/router.NormalizeHost
+     0.02s  0.88% 65.35%      0.20s  8.77%  github.com/helantianshen/gateway/internal/router.appendParamValue (inline)
+     0.02s  0.88% 66.23%      0.39s 17.11%  github.com/helantianshen/gateway/internal/router.findStaticChild
+     0.02s  0.88% 67.11%      0.02s  0.88%  github.com/helantianshen/gateway/internal/router.insertRoute
+     0.02s  0.88% 67.98%      0.02s  0.88%  internal/chacha8rand.block
+     0.02s  0.88% 68.86%      0.17s  7.46%  internal/runtime/maps.(*Map).growToSmall
+     0.02s  0.88% 69.74%      0.02s  0.88%  internal/runtime/maps.bitset.first (inline)
+     0.02s  0.88% 70.61%      0.24s 10.53%  internal/stringslite.IndexByte (inline)
+     0.02s  0.88% 71.49%      0.03s  1.32%  runtime.(*spanSet).push
+     0.02s  0.88% 72.37%      0.06s  2.63%  runtime.(*sweepLocked).sweep
+     0.02s  0.88% 73.25%      0.02s  0.88%  runtime.acquirem (inline)
+     0.02s  0.88% 74.12%      0.02s  0.88%  runtime.cmpstring
+     0.02s  0.88% 75.00%      0.02s  0.88%  runtime.extractHeapBitsSmall
+     0.02s  0.88% 75.88%      0.04s  1.75%  runtime.mallocgcSmallScanNoHeaderSC6
+     0.02s  0.88% 76.75%      0.02s  0.88%  runtime.releasem (inline)
+     0.02s  0.88% 77.63%      0.02s  0.88%  runtime.scanblock
+     0.02s  0.88% 78.51%      0.02s  0.88%  runtime.step
+     0.02s  0.88% 79.39%      0.26s 11.40%  strings.IndexByte (inline)
+     0.01s  0.44% 79.82%      0.04s  1.75%  github.com/helantianshen/gateway/internal/router.(*Router).hostCandidates
+     0.01s  0.44% 80.26%      0.20s  8.77%  github.com/helantianshen/gateway/internal/router.firstPrefixSegment
+     0.01s  0.44% 80.70%      0.06s  2.63%  github.com/helantianshen/gateway/internal/router.matchStaticPrefix
+     0.01s  0.44% 81.14%      0.08s  3.51%  internal/runtime/maps.NewMap
+     0.01s  0.44% 81.58%      0.08s  3.51%  net/netip.parseIPv4
+     0.01s  0.44% 82.02%      0.02s  0.88%  runtime.(*mheap).freeSpan (inline)
+     0.01s  0.44% 82.46%      0.03s  1.32%  runtime.(*unwinder).resolveInternal
+     0.01s  0.44% 82.89%      0.17s  7.46%  runtime.makeslice
+     0.01s  0.44% 83.33%      0.42s 18.42%  runtime.mallocgc
+     0.01s  0.44% 83.77%      0.05s  2.19%  runtime.mallocgcSmallScanNoHeaderSC4
+     0.01s  0.44% 84.21%      0.03s  1.32%  runtime.mallocgcSmallScanSlowPath
+     0.01s  0.44% 84.65%      0.04s  1.75%  runtime.mallocgcTinySC2
+     0.01s  0.44% 85.09%      0.05s  2.19%  runtime.newobject
+     0.01s  0.44% 85.53%      0.04s  1.75%  runtime.pcvalue
+     0.01s  0.44% 85.96%      0.03s  1.32%  runtime.scanObject
+     0.01s  0.44% 86.40%      0.02s  0.88%  runtime.scanframeworker
+     0.01s  0.44% 86.84%      0.11s  4.82%  runtime.sweepone
+     0.01s  0.44% 87.28%      0.02s  0.88%  runtime.typePointers.next
+         0     0% 87.28%      1.92s 84.21%  github.com/helantianshen/gateway/internal/router.BenchmarkRouteMatrix.func1
+         0     0% 87.28%      0.02s  0.88%  github.com/helantianshen/gateway/internal/router.Compile
+         0     0% 87.28%      1.92s 84.21%  github.com/helantianshen/gateway/internal/router.benchmarkMatchRequest
+         0     0% 87.28%      0.02s  0.88%  github.com/helantianshen/gateway/internal/router.buildMethodTree
+         0     0% 87.28%      1.36s 59.65%  github.com/helantianshen/gateway/internal/router.matchMethodTree (inline)
+         0     0% 87.28%      0.06s  2.63%  github.com/helantianshen/gateway/internal/router.splitAuthorityHost
+         0     0% 87.28%      0.02s  0.88%  internal/chacha8rand.(*State).Refill
+         0     0% 87.28%      0.14s  6.14%  internal/runtime/maps.newGroups (inline)
+         0     0% 87.28%      0.14s  6.14%  internal/runtime/maps.newarray
+         0     0% 87.28%      0.02s  0.88%  internal/runtime/maps.rand
+         0     0% 87.28%      0.07s  3.07%  net/netip.parseIPv4Fields
+         0     0% 87.28%      0.02s  0.88%  runtime.(*inlineUnwinder).resolveInternal (inline)
+         0     0% 87.28%      0.05s  2.19%  runtime.(*mcache).nextFree
+         0     0% 87.28%      0.05s  2.19%  runtime.(*mcache).refill
+         0     0% 87.28%      0.04s  1.75%  runtime.(*mcentral).cacheSpan
+         0     0% 87.28%      0.04s  1.75%  runtime.(*mcentral).grow
+         0     0% 87.28%      0.02s  0.88%  runtime.(*mcentral).uncacheSpan
+         0     0% 87.28%      0.02s  0.88%  runtime.(*mheap).alloc
+         0     0% 87.28%      0.02s  0.88%  runtime.(*mheap).alloc.func1
+         0     0% 87.28%      0.02s  0.88%  runtime.(*mheap).allocSpan
+         0     0% 87.28%      0.03s  1.32%  runtime.(*mheap).nextSpanForSweep
+         0     0% 87.28%      0.02s  0.88%  runtime.(*mspan).initHeapBits
+         0     0% 87.28%      0.02s  0.88%  runtime.(*unwinder).initAt
+         0     0% 87.28%      0.11s  4.82%  runtime.bgsweep
+         0     0% 87.28%      0.04s  1.75%  runtime.callers
+         0     0% 87.28%      0.04s  1.75%  runtime.callers.func1
+         0     0% 87.28%      0.07s  3.07%  runtime.convT
+         0     0% 87.28%      0.03s  1.32%  runtime.findRunnable
+         0     0% 87.28%      0.02s  0.88%  runtime.funcspdelta (inline)
+         0     0% 87.28%      0.02s  0.88%  runtime.futexwakeup
+         0     0% 87.28%      0.17s  7.46%  runtime.gcBgMarkWorker
+         0     0% 87.28%      0.17s  7.46%  runtime.gcBgMarkWorker.func2
+         0     0% 87.28%      0.17s  7.46%  runtime.gcDrain
+         0     0% 87.28%      0.09s  3.95%  runtime.gcDrainMarkWorkerDedicated (inline)
+         0     0% 87.28%      0.08s  3.51%  runtime.gcDrainMarkWorkerIdle (inline)
+         0     0% 87.28%      0.04s  1.75%  runtime.gopreempt_m (inline)
+         0     0% 87.28%      0.04s  1.75%  runtime.goschedImpl
+         0     0% 87.28%      0.02s  0.88%  runtime.lock (inline)
+         0     0% 87.28%      0.02s  0.88%  runtime.lock2
+         0     0% 87.28%      0.02s  0.88%  runtime.lockWithRank (inline)
+         0     0% 87.28%      0.04s  1.75%  runtime.mProf_Malloc
+         0     0% 87.28%      0.08s  3.51%  runtime.makemap
+         0     0% 87.28%      0.05s  2.19%  runtime.markroot
+         0     0% 87.28%      0.03s  1.32%  runtime.markroot.func1
+         0     0% 87.28%      0.02s  0.88%  runtime.markrootBlock
+         0     0% 87.28%      0.02s  0.88%  runtime.mcall
+         0     0% 87.28%      0.04s  1.75%  runtime.morestack
+         0     0% 87.28%      0.02s  0.88%  runtime.newInlineUnwinder
+         0     0% 87.28%      0.14s  6.14%  runtime.newarray
+         0     0% 87.28%      0.04s  1.75%  runtime.newstack
+         0     0% 87.28%      0.02s  0.88%  runtime.notewakeup
+         0     0% 87.28%      0.02s  0.88%  runtime.park_m
+         0     0% 87.28%      0.02s  0.88%  runtime.pcdatavalue1
+         0     0% 87.28%      0.04s  1.75%  runtime.profilealloc
+         0     0% 87.28%      0.02s  0.88%  runtime.rand
+         0     0% 87.28%      0.10s  4.39%  runtime.scanSpan
+         0     0% 87.28%      0.03s  1.32%  runtime.scanstack
+         0     0% 87.28%      0.04s  1.75%  runtime.schedule
+         0     0% 87.28%      0.05s  2.19%  runtime.slicebytetostring
+         0     0% 87.28%      0.27s 11.84%  runtime.systemstack
+         0     0% 87.28%      0.02s  0.88%  runtime.tracebackPCs
+         0     0% 87.28%      0.03s  1.32%  runtime.typedmemmove
+         0     0% 87.28%      1.93s 84.65%  testing.(*B).launch
+         0     0% 87.28%      1.93s 84.65%  testing.(*B).runN

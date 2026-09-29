@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/helantianshen/gateway/internal/dataplane/policy"
@@ -84,7 +85,15 @@ func (h *GatewayHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, matchErr := h.router.Match(r.Host, r.Method, segments)
 	if matchErr != nil {
-		response.WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "没有匹配的路由")
+		switch matchErr.Code {
+		case router.MatchErrIllegalHost, router.MatchErrIllegalPath:
+			response.WriteError(w, r, http.StatusBadRequest, "BAD_REQUEST", "请求 Host 或路径非法")
+		case router.MatchErrMethodNotAllowed:
+			w.Header().Set("Allow", strings.Join(matchErr.AllowedMethods, ", "))
+			response.WriteError(w, r, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "请求方法不允许")
+		default:
+			response.WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "没有匹配的路由")
+		}
 		return
 	}
 

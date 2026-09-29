@@ -219,3 +219,20 @@ func TestCompile_CannotBypassValidation(t *testing.T) {
 		t.Fatalf("Compile 绕过了 endpoint 校验: %v", err)
 	}
 }
+
+func TestValidateDecodedPathTemplates(t *testing.T) {
+	for _, test := range []struct {
+		path  string
+		valid bool
+	}{
+		{"/用户/:id", true}, {"/100%", true}, {"/a?b#c", true},
+		{"/a/../b", false}, {"/a\\b", false}, {"/a\x00b", false}, {"/\xff", false},
+	} {
+		spec := validSpec()
+		spec.Routes[0].Path = test.path
+		err := Validate(spec, "routes.yaml")
+		if (err == nil) != test.valid {
+			t.Errorf("Validate(%q)=%v", test.path, err)
+		}
+	}
+}

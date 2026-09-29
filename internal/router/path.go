@@ -4,11 +4,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
 // ParsePath 从 EscapedPath 按段解码，保留原始斜杠边界
-// 编码斜杠、反斜杠、dot segment、无效转义或 UTF-8 返回 MatchErrIllegalPath
+// 编码斜杠、反斜杠、控制字符、dot segment、无效转义或 UTF-8 返回 MatchErrIllegalPath
 func ParsePath(req *http.Request) ([]string, *MatchError) {
 	if req == nil || req.URL == nil {
 		return nil, &MatchError{Code: MatchErrIllegalPath, Message: "请求或 URL 为空"}
@@ -38,6 +39,11 @@ func ParsePath(req *http.Request) ([]string, *MatchError) {
 		}
 		if !utf8.ValidString(decoded) {
 			return nil, &MatchError{Code: MatchErrIllegalPath, Message: "路径段不是有效 UTF-8"}
+		}
+		for _, char := range decoded {
+			if unicode.IsControl(char) {
+				return nil, &MatchError{Code: MatchErrIllegalPath, Message: "路径包含控制字符"}
+			}
 		}
 		if decoded == "." || decoded == ".." {
 			return nil, &MatchError{Code: MatchErrIllegalPath, Message: "路径包含 dot segment"}

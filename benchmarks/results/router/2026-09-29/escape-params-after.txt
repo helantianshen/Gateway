@@ -1,0 +1,38 @@
+internal/router/match.go:97:33: host does not escape
+internal/router/match.go:216:24: prefix does not escape
+internal/router/match.go:216:39: segments does not escape
+internal/router/match.go:191:40: segment does not escape
+internal/router/match.go:151:28: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:182:28: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:146:27: &MatchResult{...} escapes to heap in matchPath:
+internal/router/match.go:182:28: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:151:28: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:146:27: make(map[string]string, len(route.paramNames)) escapes to heap in matchPath:
+internal/router/match.go:146:27: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:146:27: &MatchResult{...} escapes to heap
+internal/router/match.go:151:53: append does not escape
+internal/router/match.go:151:28: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:151:28: &MatchResult{...} escapes to heap
+internal/router/match.go:174:21: append does not escape
+internal/router/match.go:181:21: append does not escape
+internal/router/match.go:182:28: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:182:28: &MatchResult{...} escapes to heap
+internal/router/match.go:106:22: group does not escape
+internal/router/match.go:106:40: method does not escape
+internal/router/match.go:89:19: append(unique, method) escapes to heap in collectAllowedMethods:
+internal/router/match.go:79:20: append(methods, method) escapes to heap in collectAllowedMethods:
+internal/router/match.go:81:21: append(methods, "HEAD") escapes to heap in collectAllowedMethods:
+internal/router/match.go:79:20: append escapes to heap
+internal/router/match.go:81:21: append escapes to heap
+internal/router/match.go:89:19: append escapes to heap
+internal/router/match.go:44:15: &MatchError{...} escapes to heap in (*Router).Match:
+internal/router/match.go:46:14: &MatchError{...} escapes to heap in (*Router).Match:
+internal/router/match.go:10:30: method does not escape
+internal/router/match.go:44:15: &MatchError{...} escapes to heap
+internal/router/match.go:46:14: &MatchError{...} escapes to heap
+internal/router/match.go:59:22: &MatchError{...} escapes to heap in (*Router).AllowedMethods:
+internal/router/match.go:59:22: &MatchError{...} escapes to heap
+internal/router/match.go:250:9: &MatchResult{...} escapes to heap in buildMatchResult:
+internal/router/match.go:241:16: make(map[string]string, len(route.paramNames)) escapes to heap in buildMatchResult:
+internal/router/match.go:241:16: make(map[string]string, len(route.paramNames)) escapes to heap
+internal/router/match.go:250:9: &MatchResult{...} escapes to heap

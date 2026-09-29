@@ -2,11 +2,12 @@
 
 一个以 Go `net/http` 与 `httputil.ReverseProxy` 为数据面核心的 API 网关，支持双 Server 生命周期、优雅停机、共享连接池、不可变压缩 Radix Tree、健康感知 Round Robin、请求上下文、结构化日志和 Prometheus 指标。
 
-> 当前版本：**Phase 5** — 中间件、结构化日志与 Prometheus
+> 当前范围：**Phase 5 静态数据面，维护期** — 修复已有问题并优化现有核心模块，后续功能阶段暂停
 
 ## 文档导航与当前边界
 
 - [当前实现与 AI 开发导航](.agent/PROJECT.md)：模块依赖、请求链路、状态所有权和修改入口。
+- [Router 维护与性能对照](docs/11-router-maintenance.md)：Host 索引、400/405 契约、路径语义与测量证据。
 - [当前代码审查](docs/10-current-architecture-review.md)：五项已复现且尚未修复的缺陷、测试不足和验证边界。
 - [目标架构](docs/02-architecture-design.md)与[阶段路线](docs/03-development-roadmap.md)：包含未来规划，不代表全部已实现。
 - [贡献指南](CONTRIBUTING.md)：开发环境与检查命令。
@@ -78,8 +79,8 @@ curl -i 'http://127.0.0.1:8080/anything/here'
 # 非法编码斜杠返回 400；Header 和 JSON body 使用同一个 request ID
 curl -i -H 'X-Request-ID: demo-bad-path' 'http://127.0.0.1:8080/objects%2F123'
 
-# 未配置的非 GET 请求返回 404
-curl -i -X DELETE 'http://127.0.0.1:8080/anything/here'
+# 已有 GET 路径不接受 POST 时返回 405，并带 Allow: GET, HEAD
+curl -i -X POST 'http://127.0.0.1:8080/hello'
 
 # 健康端点与 Prometheus 指标
 curl -i http://127.0.0.1:9090/livez
@@ -247,6 +248,7 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 路由匹配器在启动时将所有路由编译为一棵不可变的压缩 Radix Tree：
 
 - **builder → compress → freeze**：构建阶段使用可变 `buildNode`，静态边压缩合并连续 static-only 子链，冻结阶段深拷贝为只读 `node`，不保留 builder 或配置引用；
+- **Host 索引**：exact map、单层 wildcard 后缀 map 和 any 组；最多查询三个候选，某层没有匹配 Method/Path 时继续回退；非空非法 Host 返回 400。
 - **Host → Method → Path** 分层 specificity：exact host > wildcard > any；显式 method > GET fallback > any；static > param > catch-all；更长前缀 > 更短前缀；priority 仅在前述语义层级完全相同时生效；
 - **编译期冲突检测**：两条路由在相同 Host+Method+Path specificity 且相同 priority 时视为冲突，启动时被拒绝；
 - **插入顺序无关**：子节点固定排序（static > param > catchAll，同类型按字典序），叶子按 priority 降序排列；
@@ -263,9 +265,11 @@ Phase 0/1 的 `GATEWAY_UPSTREAM_URL` 和 `GATEWAY_REQUEST_TIMEOUT` 已移除。�
 4. 按字面 `/` 分段
 5. 每段 `PathUnescape`
 6. 验证 UTF-8 有效性
-7. 拒绝解码后的 `.` 和 `..`
+7. 拒绝解码后的 `.`、`..` 和控制字符
 
-非法路径返回 `400 Bad Request`，无匹配路由返回 `404 Not Found`。
+非法 Host/路径返回 `400 Bad Request`。Host + Path 存在但方法不允许时返回 `405 Method Not Allowed`，并附带去重、排序后的 `Allow`；GET 自动包含 HEAD。没有任何方法能匹配路径时返回 `404 Not Found`。OPTIONS 按普通方法匹配，不自动响应，不实现 CORS。
+
+配置 `path` 是 **decoded template**：`/用户/:id` 匹配编码后的 Unicode 请求。`%`、`?`、`#` 是字面字符，例如配置 `/100%` 对应请求 `/100%25`；配置中的 `%2F` 不表示斜杠，只能匹配双重编码后得到的字面 `%2F`。模板拒绝控制字符、反斜杠、dot segment、无效 UTF-8 和空段；请求路径保留尾斜杠与重复斜杠，不做 redirect/clean。`/files/*path` 接收 `/files`、`/files/`（参数均为空）、`/files/a`（`a`）和 `/files/a/b`（`a/b`）。
 
 ### 请求上下文与全局中间件
 
@@ -299,8 +303,9 @@ Router 只返回逻辑 `UpstreamID`；`CompiledUpstream` 再用私有 Round Robi
 |---|---|---|
 | Header 字段数超限 | 431 | `REQUEST_HEADER_FIELDS_TOO_LARGE` |
 | 请求体超过 64 MiB | 413 | `PAYLOAD_TOO_LARGE`，已知长度不执行 Proxy |
-| 非法路径（编码斜杠、dot segment） | 400 | `BAD_REQUEST` |
+| 非法 Host 或路径（编码斜杠、dot segment、控制字符） | 400 | `BAD_REQUEST` |
 | 无匹配路由 | 404 | `NOT_FOUND` |
+| Host/Path 存在但方法不允许 | 405 | `METHOD_NOT_ALLOWED`，响应带 `Allow` |
 | 所有 endpoint 不健康 | 503 | `NO_HEALTHY_UPSTREAM`，不执行 RoundTrip |
 | upstream 连接失败 | 502 | `BAD_GATEWAY` |
 | upstream 超时 | 504 | `GATEWAY_TIMEOUT` |

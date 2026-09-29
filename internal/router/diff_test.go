@@ -3,139 +3,67 @@ package router_test
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strings"
 	"testing"
 
 	router "github.com/helantianshen/gateway/internal/router"
 )
 
-// TestDiff_RandomRoutes 验证 Radix Tree 和参考 matcher 在随机生成的路由配置和
-// 请求路径上产生相同的匹配结果。固定随机种子确保可复现
-//
-// 测试分两阶段
-// 1. 仅路径匹配（固定 host="" 和 method="GET"，隔离 path 逻辑）
-// 2. 完整匹配（含 host、method、HEAD 回退）
+// TestDiff_RandomRoutes 比较独立编译器的冲突结论以及完整请求匹配结果
+// 固定随机种子；路径模式、Host、Method、Params 和错误类型均参与比较
 func TestDiff_RandomRoutes(t *testing.T) {
-	rng := rand.New(rand.NewSource(42))
-
-	// 阶段 1：仅路径匹配
-	t.Run("path_only", func(t *testing.T) {
-		for iter := 0; iter < 300; iter++ {
-			routes := generateRandomRoutesPathOnly(rng, 3+rng.Intn(8))
-
-			radix, err := router.Compile(routes)
-			if err != nil {
-				continue
-			}
-			ref, err := newReferenceMatcher(routes)
-			if err != nil {
-				t.Fatalf("参考 matcher 构建失败: %v", err)
-			}
-
-			for reqIter := 0; reqIter < 10; reqIter++ {
-				segs := randomSegments(rng, 1+rng.Intn(4))
-
-				radixResult, _ := radix.Match("", "GET", segs)
-				refResult, refErr := ref.Match("", "GET", segs)
-
-				radixMatched := radixResult != nil
-				refMatched := refResult != nil && refErr == nil
-
-				if radixMatched != refMatched {
-					t.Errorf("迭代 %d: 匹配不一致 (radix=%v, ref=%v)\n  routes=%v\n  segs=%v",
-						iter, radixMatched, refMatched, routes, segs)
+	for _, full := range []bool{false, true} {
+		t.Run(fmt.Sprintf("full_%v", full), func(t *testing.T) {
+			rng := rand.New(rand.NewSource(42))
+			for range 300 {
+				routes := generateRandomRoutesPathOnly(rng, 3+rng.Intn(8))
+				if full {
+					routes = generateRandomRoutesFull(rng, 3+rng.Intn(8))
+				}
+				radix, err := router.Compile(routes)
+				ref, refErr := newReferenceMatcher(routes)
+				if (err != nil) != (refErr != nil) {
+					t.Fatalf("编译结果不同: routes=%+v production=%v reference=%v", routes, err, refErr)
+				}
+				if err != nil {
 					continue
 				}
-				if radixMatched && refMatched {
-					if radixResult.RouteID != refResult.RouteID {
-						t.Errorf("迭代 %d: RouteID 不一致 (radix=%q, ref=%q)\n  routes=%v\n  segs=%v",
-							iter, radixResult.RouteID, refResult.RouteID, routes, segs)
+				for range 10 {
+					host, method := "", "GET"
+					if full {
+						host, method = randomHost(rng), randomRequestMethod(rng)
 					}
-					if radixResult.PathTemplate != refResult.PathTemplate {
-						t.Errorf("迭代 %d: PathTemplate 不一致 (radix=%q, ref=%q)",
-							iter, radixResult.PathTemplate, refResult.PathTemplate)
-					}
+					path := randomSegments(rng, 1+rng.Intn(4))
+					got, gotErr := radix.Match(host, method, path)
+					want, wantErr := ref.Match(host, method, path)
+					assertReferenceResult(t, got, want, host, method, path)
+					assertReferenceError(t, gotErr, wantErr)
 				}
 			}
-		}
-	})
-
-	// 阶段 2：完整匹配（含 host、method、HEAD 回退）
-	t.Run("full", func(t *testing.T) {
-		for iter := 0; iter < 200; iter++ {
-			routes := generateRandomRoutesFull(rng, 3+rng.Intn(8))
-
-			radix, err := router.Compile(routes)
-			if err != nil {
-				continue
-			}
-			ref, err := newReferenceMatcher(routes)
-			if err != nil {
-				t.Fatalf("参考 matcher 构建失败: %v", err)
-			}
-
-			for reqIter := 0; reqIter < 10; reqIter++ {
-				host := randomHost(rng)
-				method := randomRequestMethod(rng)
-				segs := randomSegments(rng, 1+rng.Intn(4))
-
-				radixResult, _ := radix.Match(host, method, segs)
-				refResult, refErr := ref.Match(host, method, segs)
-
-				radixMatched := radixResult != nil
-				refMatched := refResult != nil && refErr == nil
-
-				if radixMatched != refMatched {
-					t.Errorf("迭代 %d: 匹配不一致 (radix=%v, ref=%v)\n  host=%q method=%q segs=%v",
-						iter, radixMatched, refMatched, host, method, segs)
-					continue
-				}
-				if radixMatched && refMatched {
-					if radixResult.RouteID != refResult.RouteID {
-						t.Errorf("迭代 %d: RouteID 不一致 (radix=%q, ref=%q)\n  host=%q method=%q segs=%v",
-							iter, radixResult.RouteID, refResult.RouteID, host, method, segs)
-					}
-					if radixResult.PathTemplate != refResult.PathTemplate {
-						t.Errorf("迭代 %d: PathTemplate 不一致 (radix=%q, ref=%q)",
-							iter, radixResult.PathTemplate, refResult.PathTemplate)
-					}
-				}
-			}
-		}
-	})
+		})
+	}
 }
 
-// TestDiff_InsertionOrderIndependence 验证同一组路由以不同顺序编译后匹配结果一致
+// TestDiff_InsertionOrderIndependence 验证完整结果、参数和错误列表不依赖声明顺序
 func TestDiff_InsertionOrderIndependence(t *testing.T) {
 	rng := rand.New(rand.NewSource(999))
-	for iter := 0; iter < 100; iter++ {
+	for range 100 {
 		routes := generateRandomRoutesFull(rng, 5+rng.Intn(10))
-		shuffled := shuffleRoutes(rng, routes)
-
-		rA, errA := router.Compile(routes)
-		rB, errB := router.Compile(shuffled)
-		if errA != nil || errB != nil {
+		a, errA := router.Compile(routes)
+		b, errB := router.Compile(shuffleRoutes(rng, routes))
+		if (errA != nil) != (errB != nil) {
+			t.Fatal("插入顺序改变冲突结论")
+		}
+		if errA != nil {
 			continue
 		}
-
-		for reqIter := 0; reqIter < 10; reqIter++ {
-			host := randomHost(rng)
-			method := randomRequestMethod(rng)
-			segs := randomSegments(rng, 1+rng.Intn(4))
-
-			resA, _ := rA.Match(host, method, segs)
-			resB, _ := rB.Match(host, method, segs)
-
-			aMatched := resA != nil
-			bMatched := resB != nil
-			if aMatched != bMatched {
-				t.Errorf("迭代 %d: 插入顺序影响匹配 (A=%v, B=%v)\n  host=%q method=%q segs=%v",
-					iter, aMatched, bMatched, host, method, segs)
-				continue
-			}
-			if aMatched && resA.RouteID != resB.RouteID {
-				t.Errorf("迭代 %d: 插入顺序影响 RouteID (A=%q, B=%q)\n  host=%q method=%q segs=%v",
-					iter, resA.RouteID, resB.RouteID, host, method, segs)
+		for range 20 {
+			host, method, path := randomHost(rng), randomRequestMethod(rng), randomSegments(rng, 1+rng.Intn(4))
+			resultA, matchErrA := a.Match(host, method, path)
+			resultB, matchErrB := b.Match(host, method, path)
+			if !reflect.DeepEqual(resultA, resultB) || !reflect.DeepEqual(matchErrA, matchErrB) {
+				t.Fatalf("插入顺序改变匹配: %+v/%+v vs %+v/%+v", resultA, matchErrA, resultB, matchErrB)
 			}
 		}
 	}
@@ -177,7 +105,7 @@ func generateRandomRoutesFull(rng *rand.Rand, count int) []router.CompileInput {
 			Path:         randomPathPattern(rng),
 			Upstream:     "mock",
 			Priority:     rng.Intn(3),
-			PreserveHost: false,
+			PreserveHost: rng.Intn(2) == 0,
 		})
 	}
 	return routes
@@ -215,7 +143,7 @@ func randomRouteMethod(rng *rand.Rand) string {
 
 // randomRequestMethod 返回请求方法（不含空，真实 HTTP 请求总有方法）
 func randomRequestMethod(rng *rand.Rand) string {
-	methods := []string{"GET", "POST", "HEAD"}
+	methods := []string{"GET", "POST", "HEAD", "OPTIONS", "DELETE", "PURGE"}
 	return methods[rng.Intn(len(methods))]
 }
 

@@ -19,13 +19,19 @@ type MatchResult struct {
 type MatchErrorCode int
 
 const (
-	// MatchErrIllegalPath 表示请求路径包含非法编码、编码斜杠或 dot segment
+	// MatchErrIllegalPath 表示请求路径包含非法编码、分隔符、控制字符或 dot segment
 	// 对应 HTTP 400 Bad Request
 	MatchErrIllegalPath MatchErrorCode = iota
 
 	// MatchErrNoRoute 表示没有路由匹配该请求
 	// 对应 HTTP 404 Not Found
 	MatchErrNoRoute
+
+	// MatchErrIllegalHost 表示非空请求 Host 不满足 DNS/IP authority 约束，对应 HTTP 400
+	MatchErrIllegalHost
+
+	// MatchErrMethodNotAllowed 表示 Host/Path 存在但 Method 不允许，对应 HTTP 405
+	MatchErrMethodNotAllowed
 )
 
 // MatchError 是路由匹配失败时返回的错误
@@ -35,6 +41,8 @@ const (
 type MatchError struct {
 	Code    MatchErrorCode
 	Message string
+	// AllowedMethods 仅在 MethodNotAllowed 时包含去重并按字典序排列的方法
+	AllowedMethods []string
 }
 
 // Error 返回按错误类别标注的匹配失败原因
@@ -42,6 +50,10 @@ func (e *MatchError) Error() string {
 	switch e.Code {
 	case MatchErrIllegalPath:
 		return "非法请求路径: " + e.Message
+	case MatchErrMethodNotAllowed:
+		return "请求方法不允许: " + e.Message
+	case MatchErrIllegalHost:
+		return "非法请求 Host: " + e.Message
 	case MatchErrNoRoute:
 		return "无匹配路由: " + e.Message
 	default:

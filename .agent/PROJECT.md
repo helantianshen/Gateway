@@ -1,6 +1,6 @@
 # Gateway 项目架构与 AI 开发导航
 
-本文描述仓库**当前实现**，供 AI 定位代码、分析影响范围和开发时使用。长期目标见 [架构设计](../docs/02-architecture-design.md)，阶段计划不等同于现有能力。本次基线与验证记录见 [审查报告](../docs/10-current-architecture-review.md)。代码、`go.mod`、配置样例与实际验证优先于历史文档。
+本文描述仓库**当前实现**，供 AI 定位代码、分析影响范围和开发时使用。当前处于维护期，仅修复已有问题和优化已有核心模块，后续阶段暂停。历史目标见 [架构设计](../docs/02-architecture-design.md)，阶段计划不等同于现有能力。本次基线与验证记录见 [审查报告](../docs/10-current-architecture-review.md)。代码、`go.mod`、配置样例与实际验证优先于历史文档。
 
 ## 1. 项目定位与运行边界
 
@@ -20,7 +20,7 @@
 | `cmd/mock-service/main.go` | `newMockHandler` | hello、echo、slow、stream 演示与 `X-Mock-Instance` |
 | `internal/bootstrap/application.go` | `Application`, `newWithRuntime`, `Run`, `shutdown` | 唯一装配根，管理监听器、共享 Transport、logger 和服务生命周期 |
 | `internal/config/` | `ConfigSpec`, `LoadConfig`, `Validate`, `Compile`, `Config` | YAML/env 输入、校验、强类型 URL/duration；不持有 endpoint 运行状态 |
-| `internal/router/` | `Compile`, `ParsePath`, `Router.Match` | 不可变路由树、Host/Method/Path 语义及冲突；只返回逻辑 upstream ID |
+| `internal/router/` | `Compile`, `ParsePath`, `Router.Match`, `Router.AllowedMethods` | 不可变 Host 索引与路由树、Host/Method/Path 语义及冲突；返回匹配结果或结构化 400/404/405 错误 |
 | `internal/dataplane/gateway/` | `GatewayHandler`, `forward` | 路由、策略与 endpoint 的编排，写请求上下文 |
 | `internal/dataplane/policy/` | `Middleware`, `CompiledChain` | 启动时编译 route 策略链；当前每条链为空 |
 | `internal/dataplane/upstream/` | `CompiledUpstream`, `CompiledEndpoint`, `EndpointState` | endpoint 池、健康状态、代理实例和活跃请求计数 |
@@ -32,7 +32,7 @@
 | `internal/dataplane/requestctx/` | `RequestContext`, `Snapshot` | 单请求元数据、Request ID、traceparent v00 提取 |
 | `internal/dataplane/response/` | `WriteError` | 统一 JSON 错误与上下文 ErrorKind |
 | `internal/observability/` | `Metrics`, `NewProductionLogger` | 私有 Registry、endpoint Collector、zap；不做路由选择 |
-| `configs/gateway.yaml` | `api_version: v1` | 可运行配置：一个逻辑 upstream、三个 endpoint、八条 route |
+| `configs/gateway.yaml` | `api_version: v1` | 静态业务配置，具体 endpoint 和 route 集合以工作区文件为准 |
 | `benchmarks/results/` | router / balancer / observability | 历史测量原始记录，不是自动执行的性能门禁 |
 | `docs/01–03` | 选型 / 目标架构 / 路线 | 同时涉及未来阶段，先看状态说明 |
 | `docs/04–09` | 阶段实施和历史回溯 | 历史接口、版本和验收证据；不作为现有 schema 使用 |
@@ -155,14 +155,17 @@ public http.Server
       → 固定 Proxy → 共享 Transport → upstream
 ```
 
-- `ParsePath` 读取 `EscapedPath`，拒绝编码斜杠/反斜杠、dot segment 和非法 UTF-8；按 segment 解码，不自动 Clean、合并重复斜杠或重定向。
-- Host 去端口、单个尾点、ASCII 转小写；非法请求 Host 归一化为空，仍可能命中 any-host route。通配只匹配一层合法 DNS label。
+- `ParsePath` 读取 `EscapedPath`，拒绝编码斜杠/反斜杠、dot segment、控制字符和非法 UTF-8；按 segment 解码，不自动 Clean、合并重复斜杠或重定向。
+- 配置 Path 是已解码模板；Unicode 及字面 `%/?/#` 保留，`%XX` 不解码。模板拒绝空段、反斜杠、dot segment、控制字符和非法 UTF-8。合法转义字面字符与不可达配置的对照见 Router 维护报告。
+- `NormalizeHost` 返回 `(string, *MatchError)`；去端口、单个尾点、ASCII 转小写。非空非法 Host 返回 `MatchErrIllegalHost`，不会尝试 any；空 Host 单独表示无 authority。沿用项目 DNS/IP 子集规则及裸 IPv6 兼容行为，通配只匹配一层合法 DNS label。
 - 匹配按 Host exact > wildcard > any，然后 Method，再逐段 static > param > catch-all，最后同结构 priority；不是把所有维度相加打分。
 - 请求 Method 在 Match 中转大写；HEAD 依次找 HEAD → GET → any，转发仍保留原始 Method。`MatchMethod` helper 自身区分大小写，不能替代完整 matcher。
 - 请求 `/a/` 与 `/a` 区分，但配置 parser 拒绝非根路径中的空段，所以当前不能声明静态 `/a/`；可被 catch-all 接收。
-- `:param` 匹配非空单段；末尾 `*catchAll` 可匹配空余段。参数名不参与树结构，结果从命中叶子绑定。
+- `:param` 匹配非空单段；`/files/*path` 对 `/files` 和 `/files/` 都捕获空字符串，对 `/files//a/` 捕获 `/a/`。参数名不参与树结构，结果从命中叶子绑定；每次结果保留独立 `Params map`，递归捕获使用请求栈内的八槽缓冲，更多参数正常扩容。
+- 成功匹配保持 Host → Method → Path 优先级；全部失败后只探测尚未尝试的方法树。Host/Path 存在则返回 `MatchErrMethodNotAllowed` 和去重排序的 `AllowedMethods`，GET 包含 HEAD。
+- `Router.AllowedMethods(host, segments)` 返回 `(methods, any, error)`；any-method 用 `any=true` 表示，不枚举任意 token。OPTIONS 不自动添加；API 与 Match 的路径参数均要求先通过 ParsePath。
 - 冲突检测使用 Host/Method 分组内的路径结构+priority key；相同结构、同 priority 的路由在启动时拒绝。
-- 运行时 static 子边二分检索；Host 组仍线性遍历。builder 的兄弟查找也是线性扫描，不应声称整个编译器为 O(n)。
+- 运行时按 exact map → 首 label 后缀 wildcard map → any 选择至多三组，static 子边二分检索。builder 的兄弟查找仍是线性扫描，不应声称整个编译器为 O(n)。
 - Proxy `SetURL` 会拼接 target base path/query；没有 route 级 strip/rewrite 功能。标准库 Rewrite 的 query 清理语义仍适用，不承诺任意畸形 query 字节原样保留。
 
 ## 6. 所有权、并发与网络参数
@@ -200,7 +203,7 @@ Transport 未设置 ProxyFromEnvironment，gateway 出口不使用 HTTP_PROXY/HT
 | 阶段 | 结果 |
 |---|---|
 | Guard | 431 Header 名数量超限；413 已知长度超限或读取时触发限制 |
-| ParsePath / Match | 400 非法路径 / 404 未命中 |
+| ParsePath / Match | 400 非法 Host/路径 / 404 路径未命中 / 405 Method 不允许并附 Allow |
 | endpoint 选择 | 全部状态 unhealthy 返回 503；缺失 runtime target/Proxy 模式防御性返回 502 |
 | Proxy | 超时 504；连接/协议错误 502；客户端取消只标内部 499 |
 | Recovery | 最终响应前 panic → 500；已开始响应则中断；ErrAbortHandler 原样重新抛出 |
@@ -237,6 +240,8 @@ make audit   # 固定版本 staticcheck + govulncheck，可能下载工具并联
 ```
 
 `make fmt` 会修改文件；只检查用 `make fmt-check`。`make bench*` 和 `make fuzz*` 会覆盖 `benchmarks/results/` 中的历史证据，除非任务要求更新基线，否则把专项结果写到临时目录。CI 目前没有执行 fuzz、benchmark 或多进程 E2E。
+
+Router 专项架构、方法语义和基准证据见 [Router 维护报告](../docs/11-router-maintenance.md)。
 
 ## 9. 文档维护规则
 
