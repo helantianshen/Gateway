@@ -4,7 +4,7 @@
 
 ## 开发环境
 
-- `go.mod` 要求 Go 1.26.5，CI 固定为 1.26.5；没有 `toolchain` 指令。先用 `go version` 核实本机，不把历史记录当成当前环境。
+- `go.mod` 要求 Go 1.26.8，CI 从 `go.mod` 读取该版本；没有 `toolchain` 指令。先用 `go version` 核实本机，不把历史记录当成当前环境。
 - 当前为 Phase 5；直接依赖包括 yaml.v3、httpsnoop、zap 和 prometheus/client_golang，确切版本见 go.mod。
 - 开发前阅读 [当前架构](.agent/PROJECT.md)、[当前审查](docs/10-current-architecture-review.md)及适用阶段计划。目标架构中的未来接口不是当前实现。
 - 示例运行需要三个 mock-service；命令与配置见 README。测试本身不依赖 etcd、Redis 或外部数据库。
@@ -15,10 +15,12 @@
 2. 确保代码通过全部检查：
 
    ```bash
-   make verify
+   make ci
    ```
 
 3. 提交 Pull Request 到 `main` 分支。
+
+`make ci` 顺序运行模块完整性、`make verify` 和 `make audit`，覆盖 CI 的全部检查。复现 CI 时使用 `GOTOOLCHAIN=go1.26.8 make ci`，不会修改系统默认 Go 版本。
 
 `make verify` 包含 diff、格式、vet、单测、race 和 build；`make audit` 另行执行 staticcheck 与 govulncheck，可能需要下载工具和访问漏洞库。`go mod verify` 仅验证模块缓存完整性。
 

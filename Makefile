@@ -1,4 +1,4 @@
-.PHONY: fmt fmt-check check-diff vet staticcheck vuln audit test race build verify run run-mock run-mock-1 run-mock-2 run-mock-3 run-gateway bench bench-balancer bench-observability fuzz fuzz-path fuzz-conflict fuzz-match
+.PHONY: fmt fmt-check check-diff vet staticcheck vuln audit test race build verify ci run run-mock run-mock-1 run-mock-2 run-mock-3 run-gateway bench bench-balancer bench-observability fuzz fuzz-path fuzz-conflict fuzz-match
 
 FUZZTIME ?= 15s
 STATICCHECK_VERSION ?= v0.7.0
@@ -54,8 +54,14 @@ race:
 build:
 	go build ./...
 
-# 本地和 CI 使用的完整质量门禁
+# 不下载额外审查工具的本地质量检查
 verify: check-diff fmt-check vet test race build
+
+# 与 CI 相同的检查范围，包含模块完整性与安全审查
+ci:
+	go version
+	go mod verify
+	$(MAKE) verify audit
 
 # 默认运行 gateway
 run: run-gateway

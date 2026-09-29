@@ -10,7 +10,7 @@
 - 一个 gateway 进程拥有 public/admin 两个独立 HTTP Server，默认 `:8080` / `:9090`。admin 是运维端口，不是 Gin 控制面。
 - 运行时外部依赖为配置文件、upstream HTTP/HTTPS 服务和日志输出；Prometheus 抓取端是可选外部消费者，仓库没有自带 Prometheus Server。
 - 不存在 Gin、etcd、Redis、ConfigSnapshot、Watch、LKG、JWT、实际限流、主动健康检查、SWRR、应用级重试、OTel SDK、Dockerfile 或 Compose 实现。
-- `go.mod` 最低版本为 `1.26.5`，CI 固定 `1.26.5`；没有 `toolchain` 指令。每次任务应独立核实本机版本，不把历史测试环境当作当前环境。
+- `go.mod` 最低版本为 `1.26.8`，CI 从 `go.mod` 读取该版本；没有 `toolchain` 指令。每次任务应独立核实本机版本，不把历史测试环境当作当前环境。
 
 ## 2. 阅读入口与目录职责
 
@@ -235,6 +235,7 @@ admin 只有 GET/HEAD `/livez`、`/readyz`、`/metrics`，其他 method 返回 4
 go list -f '{{.ImportPath}}: {{join .Imports " "}}' ./...
 go list -m all
 go mod verify
+make ci      # 与 CI 相同范围，包含模块完整性、verify 和 audit
 make verify  # whitespace、gofmt、vet、test、race、build
 make audit   # 固定版本 staticcheck + govulncheck，可能下载工具并联网
 ```

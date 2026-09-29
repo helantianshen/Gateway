@@ -38,7 +38,7 @@ admin Server (:9090)
 
 ## 快速开始
 
-模块要求 Go `1.26.5`，CI 固定使用该版本（没有 `toolchain` 指令）。默认配置包含三个 mock endpoint，需要分别启动三个进程：
+模块要求 Go `1.26.8`，CI 从 `go.mod` 读取该版本（没有 `toolchain` 指令）。默认配置包含三个 mock endpoint，需要分别启动三个进程：
 
 ```bash
 # 终端 1 / 2 / 3
@@ -353,6 +353,9 @@ make fuzz
 
 # 本地核心门禁（不临时下载额外工具）
 make verify
+
+# 与 CI 相同的完整检查（包含安全审查）
+make ci
 
 # 固定版本 staticcheck + govulncheck
 make audit
