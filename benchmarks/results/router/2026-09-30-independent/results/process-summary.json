@@ -1,0 +1,22 @@
+{
+  "load upstream": {
+    "mean_cores": 0.5109897359157769,
+    "max_cores": 0.9442900931022007,
+    "samples": 775
+  },
+  "after.gateway": {
+    "mean_cores": 2.360206198166468,
+    "max_cores": 3.0778551094367788,
+    "samples": 343
+  },
+  "load": {
+    "mean_cores": 0.6276650374244115,
+    "max_cores": 1.2406578784525,
+    "samples": 641
+  },
+  "before.gateway": {
+    "mean_cores": 2.440707419884329,
+    "max_cores": 3.344632395324688,
+    "samples": 341
+  }
+}

@@ -116,7 +116,6 @@ func (e *CompiledEndpoint) State() *EndpointState {
 }
 
 // ServeHTTP 使用创建期固定的 Proxy 转发一个请求
-//
 // 返回 false 表示当前 endpoint 未编译调用方要求的 preserveHost 模式，且没有写响应
 // 返回 true 表示请求已经交给 Proxy，响应由 Proxy 或 upstream 写入
 func (e *CompiledEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request, preserveHost bool) bool {

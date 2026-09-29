@@ -1,0 +1,102 @@
+package main
+
+import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+func main() {
+	mode := flag.String("mode", "load", "")
+	addr := flag.String("addr", "127.0.0.1:28180", "")
+	n := flag.Int("hosts", 10, "")
+	c := flag.Int("c", 32, "")
+	dur := flag.Duration("duration", 10*time.Second, "")
+	wild := flag.Bool("wildcard", false, "")
+	flag.Parse()
+	if *mode == "upstream" {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			io.WriteString(w, "gateway-bench-ok\n")
+		})
+		if e := http.ListenAndServe(*addr, nil); e != nil {
+			panic(e)
+		}
+		return
+	}
+	hosts := make([]string, *n)
+	for i := range hosts {
+		hosts[i] = fmt.Sprintf("h%05d.example.com", i)
+		if *wild {
+			hosts[i] = "api." + hosts[i]
+		}
+	}
+	tr := &http.Transport{MaxIdleConns: *c * 2, MaxIdleConnsPerHost: *c * 2, MaxConnsPerHost: *c, DisableCompression: true}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 3 * time.Second}
+	var sequence atomic.Uint64
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	lat := make([]int64, 0, 1000000)
+	errs := 0
+	codes := map[int]int{}
+	start := time.Now()
+	end := start.Add(*dur)
+	for worker := 0; worker < *c; worker++ {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			local := []int64{}
+			bad := 0
+			status := map[int]int{}
+			for time.Now().Before(end) {
+				req, e := http.NewRequest("GET", "http://"+*addr+"/users/42", nil)
+				if e != nil {
+					panic(e)
+				}
+				req.Host = hosts[int(sequence.Add(1)-1)%*n]
+				t := time.Now()
+				res, e := client.Do(req)
+				if e != nil {
+					bad++
+					continue
+				}
+				body, e := io.ReadAll(res.Body)
+				res.Body.Close()
+				status[res.StatusCode]++
+				if e != nil || res.StatusCode != 200 || string(body) != "gateway-bench-ok\n" {
+					bad++
+				} else {
+					local = append(local, time.Since(t).Nanoseconds())
+				}
+			}
+			mu.Lock()
+			lat = append(lat, local...)
+			errs += bad
+			for k, v := range status {
+				codes[k] += v
+			}
+			mu.Unlock()
+		}(worker)
+	}
+	wg.Wait()
+	elapsed := time.Since(start).Seconds()
+	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
+	pct := func(p float64) float64 {
+		if len(lat) == 0 {
+			return 0
+		}
+		return float64(lat[int(float64(len(lat)-1)*p)]) / 1e6
+	}
+	json.NewEncoder(os.Stdout).Encode(map[string]any{"requests": len(lat), "errors": errs, "statuses": codes, "seconds": elapsed, "rps": float64(len(lat)) / elapsed, "p50_ms": pct(.5), "p95_ms": pct(.95), "p99_ms": pct(.99), "concurrency": *c, "hosts": *n, "wildcard": *wild})
+	if errs > 0 {
+		os.Exit(2)
+	}
+}

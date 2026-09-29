@@ -45,7 +45,8 @@ func (r *RoundRobin) Select(count int, available func(index int) bool) (int, boo
 			return -1, false
 		}
 
-		// 游标推进到实际命中位置之后。CAS 失败表示其他 goroutine 已完成选择
+		// 游标推进到实际命中位置之后
+		// CAS 失败表示其他 goroutine 已完成选择
 		// 必须基于新游标重新检查健康状态，不能返回旧选择
 		advance := uint64(selectedOffset) + 1
 		next := start + advance

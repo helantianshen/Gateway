@@ -60,10 +60,10 @@ func New(cfg *config.Config) (*Application, error) {
 
 // newWithListen 根据 Config 创建 Application，并使用传入的 listener factory
 //
-// listen 参数只负责创建监听器，调用方仍需保证返回的 listener 已经处于可接受
-// 状态。函数按 public 后 admin 的顺序创建；admin 失败时立即关闭 public，并保留
-// admin 创建错误作为装配失败原因。该入口使用 Nop logger；生产 New 通过
-// newWithRuntime 传入 net.Listen 和 production logger
+// listen 参数只负责创建监听器，调用方仍需保证返回的 listener 已经处于可接受状态
+// 函数按 public 后 admin 的顺序创建
+// admin 失败时立即关闭 public，并保留 admin 创建错误作为装配失败原因，该入口使用 Nop logger
+// 生产 New 通过 newWithRuntime 传入 net.Listen 和 production logger
 func newWithListen(cfg *config.Config, listen listenFunc) (*Application, error) {
 	return newWithRuntime(cfg, listen, zap.NewNop(), false)
 }

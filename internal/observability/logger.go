@@ -9,7 +9,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// NewProductionLogger 创建 stdout JSON logger。Access middleware 只写受控字段
+// NewProductionLogger 创建 stdout JSON logger
+// Access middleware 只写受控字段
 // 不把 Header、query、body 或底层网络错误直接交给 logger
 func NewProductionLogger() (*zap.Logger, error) {
 	config := zap.NewProductionConfig()

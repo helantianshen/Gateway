@@ -1,0 +1,1566 @@
+[
+  {
+    "name": "BenchmarkCompile/routes_10-4",
+    "before": 9418.5,
+    "after": 9646.0,
+    "change_pct": 2.4154589371980784,
+    "paired_ratio_ci95": [
+      0.9946985446985447,
+      1.0875224891522912
+    ],
+    "before_range": [
+      9198.0,
+      10239.0
+    ],
+    "after_range": [
+      9569.0,
+      10364.0
+    ],
+    "rounds": 8,
+    "before_B": 10832.0,
+    "after_B": 10872.0,
+    "before_alloc": 218.0,
+    "after_alloc": 218.0
+  },
+  {
+    "name": "BenchmarkCompile/routes_1000-4",
+    "before": 2542303.0,
+    "after": 2593030.5,
+    "change_pct": 1.995336511816248,
+    "paired_ratio_ci95": [
+      0.9909106154490557,
+      1.0394272803649154
+    ],
+    "before_range": [
+      2495129.0,
+      2717508.0
+    ],
+    "after_range": [
+      2547138.0,
+      2641976.0
+    ],
+    "rounds": 8,
+    "before_B": 1018810.5,
+    "after_B": 1018847.5,
+    "before_alloc": 18060.0,
+    "after_alloc": 18060.0
+  },
+  {
+    "name": "BenchmarkCompile/routes_10000-4",
+    "before": 188653019.5,
+    "after": 191151782.0,
+    "change_pct": 1.3245282299867878,
+    "paired_ratio_ci95": [
+      0.9801949836567868,
+      1.0496303629829553
+    ],
+    "before_range": [
+      184855684.0,
+      194386730.0
+    ],
+    "after_range": [
+      184788586.0,
+      202745434.0
+    ],
+    "rounds": 8,
+    "before_B": 10369360.0,
+    "after_B": 10369428.0,
+    "before_alloc": 180137.0,
+    "after_alloc": 180137.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10/exact-4",
+    "before": 452.25,
+    "after": 335.95,
+    "change_pct": -25.7158651188502,
+    "paired_ratio_ci95": [
+      0.7091891891891892,
+      0.7671595674244096
+    ],
+    "before_range": [
+      437.6,
+      482.8
+    ],
+    "after_range": [
+      328.0,
+      348.7
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10/fallback-4",
+    "before": 444.65,
+    "after": 335.70000000000005,
+    "change_pct": -24.50241763184525,
+    "paired_ratio_ci95": [
+      0.738954922628392,
+      0.775357385976855
+    ],
+    "before_range": [
+      431.6,
+      466.0
+    ],
+    "after_range": [
+      329.5,
+      344.1
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10/miss-4",
+    "before": 255.45,
+    "after": 114.55,
+    "change_pct": -55.1575650812292,
+    "paired_ratio_ci95": [
+      0.44461657629744383,
+      0.4523431294678316
+    ],
+    "before_range": [
+      251.8,
+      259.5
+    ],
+    "after_range": [
+      112.6,
+      116.6
+    ],
+    "rounds": 8,
+    "before_B": 136.0,
+    "after_B": 48.0,
+    "before_alloc": 5.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10/wildcard-4",
+    "before": 642.1500000000001,
+    "after": 342.1,
+    "change_pct": -46.725842871603206,
+    "paired_ratio_ci95": [
+      0.5053922292805437,
+      0.5443118536197296
+    ],
+    "before_range": [
+      626.8,
+      697.0
+    ],
+    "after_range": [
+      332.4,
+      347.6
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_100/exact-4",
+    "before": 767.1,
+    "after": 341.2,
+    "change_pct": -55.52079259548951,
+    "paired_ratio_ci95": [
+      0.4249037227214377,
+      0.45195115476506503
+    ],
+    "before_range": [
+      753.4,
+      805.0
+    ],
+    "after_range": [
+      331.0,
+      349.2
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_100/fallback-4",
+    "before": 643.45,
+    "after": 339.29999999999995,
+    "change_pct": -47.26863004118426,
+    "paired_ratio_ci95": [
+      0.5161536117037488,
+      0.538094090839218
+    ],
+    "before_range": [
+      631.2,
+      656.2
+    ],
+    "after_range": [
+      326.5,
+      346.5
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_100/miss-4",
+    "before": 448.70000000000005,
+    "after": 114.0,
+    "change_pct": -74.59326944506353,
+    "paired_ratio_ci95": [
+      0.2503836877877658,
+      0.2562825447136065
+    ],
+    "before_range": [
+      441.7,
+      471.4
+    ],
+    "after_range": [
+      113.2,
+      116.3
+    ],
+    "rounds": 8,
+    "before_B": 136.0,
+    "after_B": 48.0,
+    "before_alloc": 5.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_100/wildcard-4",
+    "before": 2354.5,
+    "after": 347.55,
+    "change_pct": -85.23890422595031,
+    "paired_ratio_ci95": [
+      0.1455919395465995,
+      0.1503973232956922
+    ],
+    "before_range": [
+      2320.0,
+      2441.0
+    ],
+    "after_range": [
+      334.8,
+      359.6
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_1000/exact-4",
+    "before": 3964.5,
+    "after": 332.95000000000005,
+    "change_pct": -91.60171522260057,
+    "paired_ratio_ci95": [
+      0.08056511056511056,
+      0.08533063085888017
+    ],
+    "before_range": [
+      3910.0,
+      4070.0
+    ],
+    "after_range": [
+      322.2,
+      340.4
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_1000/fallback-4",
+    "before": 2525.0,
+    "after": 328.8,
+    "change_pct": -86.97821782178218,
+    "paired_ratio_ci95": [
+      0.12749410840534173,
+      0.1326555023923445
+    ],
+    "before_range": [
+      2490.0,
+      2584.0
+    ],
+    "after_range": [
+      324.6,
+      368.8
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_1000/miss-4",
+    "before": 2353.5,
+    "after": 117.30000000000001,
+    "change_pct": -95.0159337157425,
+    "paired_ratio_ci95": [
+      0.049514972585407005,
+      0.050518134715025906
+    ],
+    "before_range": [
+      2316.0,
+      2377.0
+    ],
+    "after_range": [
+      116.6,
+      119.3
+    ],
+    "rounds": 8,
+    "before_B": 136.0,
+    "after_B": 48.0,
+    "before_alloc": 5.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_1000/wildcard-4",
+    "before": 19743.0,
+    "after": 342.4,
+    "change_pct": -98.26571443043105,
+    "paired_ratio_ci95": [
+      0.01703108731221181,
+      0.01758753288807934
+    ],
+    "before_range": [
+      19428.0,
+      20174.0
+    ],
+    "after_range": [
+      333.5,
+      350.0
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10000/exact-4",
+    "before": 37199.5,
+    "after": 323.55,
+    "change_pct": -99.13023024503018,
+    "paired_ratio_ci95": [
+      0.008658008658008658,
+      0.008890734242318716
+    ],
+    "before_range": [
+      36167.0,
+      37979.0
+    ],
+    "after_range": [
+      315.9,
+      340.2
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10000/fallback-4",
+    "before": 23694.0,
+    "after": 326.29999999999995,
+    "change_pct": -98.62285810753777,
+    "paired_ratio_ci95": [
+      0.013197200965748659,
+      0.014207581303378349
+    ],
+    "before_range": [
+      23283.0,
+      24437.0
+    ],
+    "after_range": [
+      312.6,
+      338.9
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10000/miss-4",
+    "before": 23440.0,
+    "after": 114.9,
+    "change_pct": -99.50981228668942,
+    "paired_ratio_ci95": [
+      0.004828317083509962,
+      0.00505677317137576
+    ],
+    "before_range": [
+      22722.0,
+      24266.0
+    ],
+    "after_range": [
+      113.9,
+      117.6
+    ],
+    "rounds": 8,
+    "before_B": 136.0,
+    "after_B": 48.0,
+    "before_alloc": 5.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkHostSelector/hosts_10000/wildcard-4",
+    "before": 193318.0,
+    "after": 333.25,
+    "change_pct": -99.82761563848167,
+    "paired_ratio_ci95": [
+      0.0017169563706343402,
+      0.0017371505883897154
+    ],
+    "before_range": [
+      191603.0,
+      199451.0
+    ],
+    "after_range": [
+      324.3,
+      344.1
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_10/hit-4",
+    "before": 253.45,
+    "after": 237.4,
+    "change_pct": -6.332609982245008,
+    "paired_ratio_ci95": [
+      0.9126365054602185,
+      0.9507486209613869
+    ],
+    "before_range": [
+      246.9,
+      259.2
+    ],
+    "after_range": [
+      227.7,
+      241.3
+    ],
+    "rounds": 8,
+    "before_B": 416.0,
+    "after_B": 400.0,
+    "before_alloc": 4.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_10/miss-4",
+    "before": 163.85000000000002,
+    "after": 148.55,
+    "change_pct": -9.337808971620387,
+    "paired_ratio_ci95": [
+      0.8806333739342266,
+      0.9444101297096974
+    ],
+    "before_range": [
+      161.9,
+      180.4
+    ],
+    "after_range": [
+      144.6,
+      163.8
+    ],
+    "rounds": 8,
+    "before_B": 88.0,
+    "after_B": 48.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_1000/hit-4",
+    "before": 324.15,
+    "after": 305.7,
+    "change_pct": -5.69180934752429,
+    "paired_ratio_ci95": [
+      0.926096289481754,
+      0.977359693877551
+    ],
+    "before_range": [
+      313.6,
+      329.3
+    ],
+    "after_range": [
+      301.7,
+      314.7
+    ],
+    "rounds": 8,
+    "before_B": 416.0,
+    "after_B": 400.0,
+    "before_alloc": 4.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_1000/miss-4",
+    "before": 212.5,
+    "after": 192.2,
+    "change_pct": -9.552941176470597,
+    "paired_ratio_ci95": [
+      0.8956683744760131,
+      0.9289461134954698
+    ],
+    "before_range": [
+      205.5,
+      220.3
+    ],
+    "after_range": [
+      191.1,
+      195.1
+    ],
+    "rounds": 8,
+    "before_B": 88.0,
+    "after_B": 48.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_10000/hit-4",
+    "before": 351.70000000000005,
+    "after": 336.8,
+    "change_pct": -4.236565254478252,
+    "paired_ratio_ci95": [
+      0.9430051813471504,
+      0.9928693667997718
+    ],
+    "before_range": [
+      343.0,
+      362.6
+    ],
+    "after_range": [
+      323.6,
+      384.2
+    ],
+    "rounds": 8,
+    "before_B": 416.0,
+    "after_B": 400.0,
+    "before_alloc": 4.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkMatch/routes_10000/miss-4",
+    "before": 243.45,
+    "after": 223.25,
+    "change_pct": -8.297391661532139,
+    "paired_ratio_ci95": [
+      0.9085714285714286,
+      0.9260636100784799
+    ],
+    "before_range": [
+      238.6,
+      247.5
+    ],
+    "after_range": [
+      220.7,
+      224.3
+    ],
+    "rounds": 8,
+    "before_B": 88.0,
+    "after_B": 48.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkMatchParallel-4",
+    "before": 188.1,
+    "after": 178.9,
+    "change_pct": -4.891015417331202,
+    "paired_ratio_ci95": [
+      0.9055358049771458,
+      0.971763452317528
+    ],
+    "before_range": [
+      169.9,
+      196.9
+    ],
+    "after_range": [
+      163.5,
+      184.2
+    ],
+    "rounds": 8,
+    "before_B": 416.0,
+    "after_B": 400.0,
+    "before_alloc": 4.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/any_method-4",
+    "before": 434.3,
+    "after": 341.35,
+    "change_pct": -21.402256504720242,
+    "paired_ratio_ci95": [
+      0.7664451065780425,
+      0.8071631878557874
+    ],
+    "before_range": [
+      421.6,
+      446.8
+    ],
+    "after_range": [
+      334.4,
+      351.3
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/catch_all-4",
+    "before": 461.0,
+    "after": 400.8,
+    "change_pct": -13.058568329718002,
+    "paired_ratio_ci95": [
+      0.8432851907738736,
+      0.8984120078311942
+    ],
+    "before_range": [
+      451.7,
+      475.4
+    ],
+    "after_range": [
+      391.0,
+      413.0
+    ],
+    "rounds": 8,
+    "before_B": 472.0,
+    "after_B": 408.0,
+    "before_alloc": 6.0,
+    "after_alloc": 4.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/depth_10-4",
+    "before": 262.5,
+    "after": 213.75,
+    "change_pct": -18.571428571428573,
+    "paired_ratio_ci95": [
+      0.8093632958801498,
+      0.8182166092613854
+    ],
+    "before_range": [
+      258.2,
+      267.0
+    ],
+    "after_range": [
+      211.2,
+      217.5
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/depth_20-4",
+    "before": 325.2,
+    "after": 280.29999999999995,
+    "change_pct": -13.806888068880696,
+    "paired_ratio_ci95": [
+      0.8155798170551785,
+      0.8794726930320149
+    ],
+    "before_range": [
+      318.6,
+      345.5
+    ],
+    "after_range": [
+      276.4,
+      285.9
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/depth_5-4",
+    "before": 232.1,
+    "after": 181.64999999999998,
+    "change_pct": -21.736320551486433,
+    "paired_ratio_ci95": [
+      0.7721410146173688,
+      0.8079470198675497
+    ],
+    "before_range": [
+      226.5,
+      235.3
+    ],
+    "after_range": [
+      178.4,
+      184.0
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/fan_out-4",
+    "before": 193.0,
+    "after": 157.75,
+    "change_pct": -18.26424870466321,
+    "paired_ratio_ci95": [
+      0.8062372188139059,
+      0.825503355704698
+    ],
+    "before_range": [
+      191.0,
+      199.2
+    ],
+    "after_range": [
+      155.7,
+      159.9
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/head_fallback-4",
+    "before": 432.0,
+    "after": 341.9,
+    "change_pct": -20.85648148148148,
+    "paired_ratio_ci95": [
+      0.7777777777777779,
+      0.8051887885105398
+    ],
+    "before_range": [
+      423.2,
+      494.7
+    ],
+    "after_range": [
+      340.2,
+      369.2
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/method_miss-4",
+    "before": 247.45,
+    "after": 537.55,
+    "change_pct": 117.23580521317439,
+    "paired_ratio_ci95": [
+      2.0884599919581825,
+      2.265490356996307
+    ],
+    "before_range": [
+      241.9,
+      252.4
+    ],
+    "after_range": [
+      519.4,
+      559.5
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 496.0,
+    "before_alloc": 5.0,
+    "after_alloc": 6.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/multi_param-4",
+    "before": 586.0,
+    "after": 435.54999999999995,
+    "change_pct": -25.674061433447104,
+    "paired_ratio_ci95": [
+      0.7317444219066936,
+      0.776262891102954
+    ],
+    "before_range": [
+      563.2,
+      597.0
+    ],
+    "after_range": [
+      430.8,
+      448.5
+    ],
+    "rounds": 8,
+    "before_B": 560.0,
+    "after_B": 400.0,
+    "before_alloc": 8.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/param-4",
+    "before": 496.9,
+    "after": 392.25,
+    "change_pct": -21.060575568524854,
+    "paired_ratio_ci95": [
+      0.7751691205730203,
+      0.8092731322129986
+    ],
+    "before_range": [
+      480.7,
+      520.2
+    ],
+    "after_range": [
+      378.0,
+      404.2
+    ],
+    "rounds": 8,
+    "before_B": 512.0,
+    "after_B": 400.0,
+    "before_alloc": 7.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/post-4",
+    "before": 410.4,
+    "after": 330.7,
+    "change_pct": -19.42007797270955,
+    "paired_ratio_ci95": [
+      0.7899364924279433,
+      0.8261194029850747
+    ],
+    "before_range": [
+      400.8,
+      424.0
+    ],
+    "after_range": [
+      322.5,
+      332.9
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10/static-4",
+    "before": 229.0,
+    "after": 180.2,
+    "change_pct": -21.31004366812228,
+    "paired_ratio_ci95": [
+      0.7794627383015598,
+      0.8
+    ],
+    "before_range": [
+      223.4,
+      232.4
+    ],
+    "after_range": [
+      177.9,
+      183.7
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/any_method-4",
+    "before": 478.7,
+    "after": 388.85,
+    "change_pct": -18.769584290787545,
+    "paired_ratio_ci95": [
+      0.8011329152336637,
+      0.8250636132315522
+    ],
+    "before_range": [
+      471.6,
+      494.3
+    ],
+    "after_range": [
+      381.4,
+      397.0
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/catch_all-4",
+    "before": 505.4,
+    "after": 436.54999999999995,
+    "change_pct": -13.622872971903444,
+    "paired_ratio_ci95": [
+      0.8514330278806785,
+      0.8808344026863653
+    ],
+    "before_range": [
+      494.2,
+      519.9
+    ],
+    "after_range": [
+      428.2,
+      453.5
+    ],
+    "rounds": 8,
+    "before_B": 472.0,
+    "after_B": 408.0,
+    "before_alloc": 6.0,
+    "after_alloc": 4.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/depth_10-4",
+    "before": 301.45,
+    "after": 254.4,
+    "change_pct": -15.6078951733289,
+    "paired_ratio_ci95": [
+      0.8214631002255881,
+      0.8548760330578513
+    ],
+    "before_range": [
+      292.8,
+      312.5
+    ],
+    "after_range": [
+      250.5,
+      258.6
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/depth_20-4",
+    "before": 364.4,
+    "after": 323.3,
+    "change_pct": -11.278814489571886,
+    "paired_ratio_ci95": [
+      0.8690899152773982,
+      0.9027012127894156
+    ],
+    "before_range": [
+      357.1,
+      374.6
+    ],
+    "after_range": [
+      318.0,
+      331.8
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/depth_5-4",
+    "before": 273.2,
+    "after": 220.95,
+    "change_pct": -19.125183016105417,
+    "paired_ratio_ci95": [
+      0.8067758749069247,
+      0.8167445203018325
+    ],
+    "before_range": [
+      268.6,
+      278.3
+    ],
+    "after_range": [
+      216.7,
+      227.3
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/fan_out-4",
+    "before": 240.95,
+    "after": 200.85,
+    "change_pct": -16.64245694127412,
+    "paired_ratio_ci95": [
+      0.8175510204081633,
+      0.8483830323393532
+    ],
+    "before_range": [
+      235.0,
+      254.0
+    ],
+    "after_range": [
+      198.6,
+      206.6
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/head_fallback-4",
+    "before": 473.4,
+    "after": 395.8,
+    "change_pct": -16.39205745669623,
+    "paired_ratio_ci95": [
+      0.8221989528795812,
+      0.8540680154972019
+    ],
+    "before_range": [
+      464.6,
+      482.2
+    ],
+    "after_range": [
+      385.1,
+      403.8
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/method_miss-4",
+    "before": 244.25,
+    "after": 581.3,
+    "change_pct": 137.99385875127942,
+    "paired_ratio_ci95": [
+      2.3520953163516842,
+      2.4443064182194614
+    ],
+    "before_range": [
+      240.4,
+      248.7
+    ],
+    "after_range": [
+      572.5,
+      599.3
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 496.0,
+    "before_alloc": 5.0,
+    "after_alloc": 6.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/multi_param-4",
+    "before": 624.9000000000001,
+    "after": 480.3,
+    "change_pct": -23.13970235237639,
+    "paired_ratio_ci95": [
+      0.755559085133418,
+      0.7898193760262726
+    ],
+    "before_range": [
+      609.0,
+      646.6
+    ],
+    "after_range": [
+      471.4,
+      513.2
+    ],
+    "rounds": 8,
+    "before_B": 560.0,
+    "after_B": 400.0,
+    "before_alloc": 8.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/param-4",
+    "before": 545.5,
+    "after": 433.75,
+    "change_pct": -20.485792850595786,
+    "paired_ratio_ci95": [
+      0.7783579402232625,
+      0.8405188162221411
+    ],
+    "before_range": [
+      535.6,
+      557.3
+    ],
+    "after_range": [
+      425.6,
+      511.9
+    ],
+    "rounds": 8,
+    "before_B": 512.0,
+    "after_B": 400.0,
+    "before_alloc": 7.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/post-4",
+    "before": 459.2,
+    "after": 372.45,
+    "change_pct": -18.89155052264808,
+    "paired_ratio_ci95": [
+      0.8020271727409963,
+      0.8522829006266786
+    ],
+    "before_range": [
+      440.6,
+      476.8
+    ],
+    "after_range": [
+      365.6,
+      401.4
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_1000/static-4",
+    "before": 271.35,
+    "after": 224.45,
+    "change_pct": -17.28395061728396,
+    "paired_ratio_ci95": [
+      0.7612445045654379,
+      0.8628268283440698
+    ],
+    "before_range": [
+      263.9,
+      305.7
+    ],
+    "after_range": [
+      218.8,
+      236.8
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/any_method-4",
+    "before": 469.25,
+    "after": 395.35,
+    "change_pct": -15.748534896110812,
+    "paired_ratio_ci95": [
+      0.8244274809160306,
+      0.8502800517018526
+    ],
+    "before_range": [
+      464.2,
+      484.7
+    ],
+    "after_range": [
+      385.2,
+      403.8
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/catch_all-4",
+    "before": 508.1,
+    "after": 445.65,
+    "change_pct": -12.290887620547142,
+    "paired_ratio_ci95": [
+      0.858830478440638,
+      0.8944972288202692
+    ],
+    "before_range": [
+      502.6,
+      519.0
+    ],
+    "after_range": [
+      436.2,
+      453.8
+    ],
+    "rounds": 8,
+    "before_B": 472.0,
+    "after_B": 408.0,
+    "before_alloc": 6.0,
+    "after_alloc": 4.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/depth_10-4",
+    "before": 317.95000000000005,
+    "after": 276.7,
+    "change_pct": -12.97373800912095,
+    "paired_ratio_ci95": [
+      0.8327239488117002,
+      0.878864353312303
+    ],
+    "before_range": [
+      313.4,
+      347.9
+    ],
+    "after_range": [
+      273.3,
+      280.2
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/depth_20-4",
+    "before": 381.6,
+    "after": 346.95000000000005,
+    "change_pct": -9.080188679245271,
+    "paired_ratio_ci95": [
+      0.8974493820667894,
+      0.9357161909842625
+    ],
+    "before_range": [
+      368.7,
+      387.6
+    ],
+    "after_range": [
+      341.3,
+      351.8
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/depth_5-4",
+    "before": 288.9,
+    "after": 243.85000000000002,
+    "change_pct": -15.593631014191745,
+    "paired_ratio_ci95": [
+      0.8367066895368782,
+      0.8524475524475524
+    ],
+    "before_range": [
+      278.4,
+      294.7
+    ],
+    "after_range": [
+      243.0,
+      246.5
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/fan_out-4",
+    "before": 251.15,
+    "after": 219.8,
+    "change_pct": -12.482580131395583,
+    "paired_ratio_ci95": [
+      0.8636184469846275,
+      0.8861985472154963
+    ],
+    "before_range": [
+      245.3,
+      254.5
+    ],
+    "after_range": [
+      217.8,
+      222.4
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/head_fallback-4",
+    "before": 476.4,
+    "after": 396.05,
+    "change_pct": -16.866078925272877,
+    "paired_ratio_ci95": [
+      0.8004065040650407,
+      0.8506136267456622
+    ],
+    "before_range": [
+      471.3,
+      492.0
+    ],
+    "after_range": [
+      385.0,
+      406.4
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/method_miss-4",
+    "before": 237.45,
+    "after": 594.3499999999999,
+    "change_pct": 150.30532743735517,
+    "paired_ratio_ci95": [
+      2.4649446494464944,
+      2.5203908241291417
+    ],
+    "before_range": [
+      230.8,
+      243.9
+    ],
+    "after_range": [
+      582.0,
+      602.8
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 496.0,
+    "before_alloc": 5.0,
+    "after_alloc": 6.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/multi_param-4",
+    "before": 631.7,
+    "after": 480.79999999999995,
+    "change_pct": -23.887921481716013,
+    "paired_ratio_ci95": [
+      0.7450093574547723,
+      0.7881837364064276
+    ],
+    "before_range": [
+      609.8,
+      641.2
+    ],
+    "after_range": [
+      472.0,
+      487.1
+    ],
+    "rounds": 8,
+    "before_B": 560.0,
+    "after_B": 400.0,
+    "before_alloc": 8.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/param-4",
+    "before": 538.6500000000001,
+    "after": 434.15,
+    "change_pct": -19.400352733686088,
+    "paired_ratio_ci95": [
+      0.8013762320996838,
+      0.8339935861158272
+    ],
+    "before_range": [
+      530.1,
+      549.0
+    ],
+    "after_range": [
+      430.9,
+      448.4
+    ],
+    "rounds": 8,
+    "before_B": 512.0,
+    "after_B": 400.0,
+    "before_alloc": 7.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/post-4",
+    "before": 454.75,
+    "after": 379.0,
+    "change_pct": -16.657504123144584,
+    "paired_ratio_ci95": [
+      0.8066753359341136,
+      0.8464961067853171
+    ],
+    "before_range": [
+      439.3,
+      469.2
+    ],
+    "after_range": [
+      372.2,
+      388.1
+    ],
+    "rounds": 8,
+    "before_B": 480.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkRouteMatrix/routes_10000/static-4",
+    "before": 285.29999999999995,
+    "after": 242.25,
+    "change_pct": -15.089379600420594,
+    "paired_ratio_ci95": [
+      0.8451296426068676,
+      0.859402460456942
+    ],
+    "before_range": [
+      280.3,
+      288.4
+    ],
+    "after_range": [
+      240.0,
+      245.1
+    ],
+    "rounds": 8,
+    "before_B": 128.0,
+    "after_B": 64.0,
+    "before_alloc": 3.0,
+    "after_alloc": 1.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_10/exact-4",
+    "before": 450.75,
+    "after": 336.0,
+    "change_pct": -25.45757071547421,
+    "paired_ratio_ci95": [
+      0.7205372616984402,
+      0.7827050997782705
+    ],
+    "before_range": [
+      431.7,
+      480.1
+    ],
+    "after_range": [
+      332.6,
+      353.0
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_10/wildcard-4",
+    "before": 565.85,
+    "after": 350.05,
+    "change_pct": -38.137315542988425,
+    "paired_ratio_ci95": [
+      0.6038029386343994,
+      0.6301006889242183
+    ],
+    "before_range": [
+      551.3,
+      578.5
+    ],
+    "after_range": [
+      334.7,
+      356.7
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_1000/exact-4",
+    "before": 2198.5,
+    "after": 349.5,
+    "change_pct": -84.10279736183762,
+    "paired_ratio_ci95": [
+      0.15714934180662732,
+      0.16407900780891135
+    ],
+    "before_range": [
+      2162.0,
+      2249.0
+    ],
+    "after_range": [
+      346.2,
+      371.9
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_1000/wildcard-4",
+    "before": 10267.0,
+    "after": 358.79999999999995,
+    "change_pct": -96.50530826921204,
+    "paired_ratio_ci95": [
+      0.033431777909037216,
+      0.03578367551326991
+    ],
+    "before_range": [
+      9985.0,
+      10886.0
+    ],
+    "after_range": [
+      339.6,
+      368.4
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_10000/exact-4",
+    "before": 17905.0,
+    "after": 417.25,
+    "change_pct": -97.66964535046077,
+    "paired_ratio_ci95": [
+      0.023011395065825866,
+      0.024298664378050745
+    ],
+    "before_range": [
+      17405.0,
+      18643.0
+    ],
+    "after_range": [
+      409.3,
+      453.0
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  },
+  {
+    "name": "BenchmarkUniformHost/hosts_10000/wildcard-4",
+    "before": 98139.5,
+    "after": 426.6,
+    "change_pct": -99.56531264169881,
+    "paired_ratio_ci95": [
+      0.004311264129673075,
+      0.004429542683556859
+    ],
+    "before_range": [
+      96579.0,
+      99774.0
+    ],
+    "after_range": [
+      415.0,
+      445.0
+    ],
+    "rounds": 8,
+    "before_B": 488.0,
+    "after_B": 400.0,
+    "before_alloc": 6.0,
+    "after_alloc": 3.0
+  }
+]

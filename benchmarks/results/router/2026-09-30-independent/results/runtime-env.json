@@ -1,0 +1,9 @@
+{
+  "GOGC": "<unset>",
+  "GOMEMLIMIT": "<unset>",
+  "GODEBUG": "<unset>",
+  "GOFLAGS": "<unset>",
+  "GOEXPERIMENT": "<unset>",
+  "GOTOOLCHAIN": "<unset>",
+  "GOMAXPROCS": "<unset>"
+}

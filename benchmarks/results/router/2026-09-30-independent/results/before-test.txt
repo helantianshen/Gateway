@@ -1,0 +1,16 @@
+?   	github.com/helantianshen/gateway/cmd/gateway	[no test files]
+ok  	github.com/helantianshen/gateway/cmd/mock-service	0.014s
+ok  	github.com/helantianshen/gateway/internal/bootstrap	0.047s
+ok  	github.com/helantianshen/gateway/internal/config	0.009s
+ok  	github.com/helantianshen/gateway/internal/dataplane/balancer	0.008s
+ok  	github.com/helantianshen/gateway/internal/dataplane/gateway	0.008s
+ok  	github.com/helantianshen/gateway/internal/dataplane/middleware	0.010s
+ok  	github.com/helantianshen/gateway/internal/dataplane/policy	0.007s
+ok  	github.com/helantianshen/gateway/internal/dataplane/proxy	0.167s
+ok  	github.com/helantianshen/gateway/internal/dataplane/requestctx	0.010s
+ok  	github.com/helantianshen/gateway/internal/dataplane/response	0.011s
+ok  	github.com/helantianshen/gateway/internal/dataplane/server	0.012s
+ok  	github.com/helantianshen/gateway/internal/dataplane/transport	0.006s
+ok  	github.com/helantianshen/gateway/internal/dataplane/upstream	0.005s
+ok  	github.com/helantianshen/gateway/internal/observability	0.006s
+ok  	github.com/helantianshen/gateway/internal/router	0.030s

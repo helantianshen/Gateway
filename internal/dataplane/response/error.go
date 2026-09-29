@@ -24,9 +24,10 @@ type ErrorBody struct {
 }
 
 // WriteError 写入统一 JSON 错误响应
-//
-// r 可以为 nil；存在 RequestContext 时，本函数同步记录 ErrorKind，并确保响应 Header
-// 与 JSON body 使用同一个 X-Request-ID。调用时响应头必须尚未写出
+// r 可以为 nil
+// 存在 RequestContext 时，本函数同步记录 ErrorKind
+// 确保响应 Header 与 JSON body 使用同一个 X-Request-ID
+// 调用时响应头必须尚未写出
 func WriteError(w http.ResponseWriter, r *http.Request, statusCode int, code, message string) {
 	requestID := ""
 	if r != nil {

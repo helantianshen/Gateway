@@ -78,9 +78,8 @@ func Load() (*Config, error) {
 
 // LoadBootstrapConfig 使用 os.LookupEnv 读取本地启动参数
 //
-// LookupEnv 能严格区分“未设置”和“已设置为空字符串”：前者采用默认值，后者作为
-// 明确的错误输入被拒绝。旧业务环境变量即使显式设置为空也会触发迁移错误，避免旧
-// 部署清单看似启动成功、实际却已经不再生效
+// LookupEnv 能严格区分“未设置”和“已设置为空字符串”：前者采用默认值，后者作为明确的错误输入被拒绝
+// 旧业务环境变量即使显式设置为空也会触发迁移错误，避免旧部署清单看似启动成功、实际却已经不再生效
 func LoadBootstrapConfig() (BootstrapConfig, error) {
 	// 从固定默认值开始叠加环境变量；显式空值记录为错误，不回退默认值
 	bootstrap := BootstrapConfig{

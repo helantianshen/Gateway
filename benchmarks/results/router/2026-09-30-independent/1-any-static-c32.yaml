@@ -1,0 +1,17 @@
+api_version: v1
+upstreams:
+  - id: bench
+    endpoints:
+      - id: fixed
+        url: http://127.0.0.1:58135
+        weight: 100
+routes:
+  - id: r0
+    host: ""
+    method: GET
+    path: /users/42
+    upstream: bench
+policies:
+  request_timeout: 3s
+  rate: 0
+  burst: 0

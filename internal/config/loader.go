@@ -38,8 +38,10 @@ func LoadConfig(path string) (*ConfigSpec, error) {
 		return nil, yamlLocationError(path, line, column, "配置文档不能为 null")
 	}
 
-	// Decoder 必须在第一份文档后立即到达 EOF。即使第二份文档内容本身为 null
-	// 它仍是多文档输入，必须拒绝，避免运行时只读取其中一部分而产生配置歧义
+	// Decoder 必须在第一份文档后立即到达 EOF
+	// 即使第二份文档内容本身为 null
+	// 它仍是多文档输入，必须拒绝
+	// 避免运行时只读取其中一部分而产生配置歧义
 	var extra yaml.Node
 	if err := nodeDecoder.Decode(&extra); err == nil {
 		line, column := documentLocation(&extra)
@@ -63,7 +65,8 @@ func LoadConfig(path string) (*ConfigSpec, error) {
 }
 
 // isNullDocument 同时识别显式 null（null、~）与只包含文档标记/注释的空文档
-// yaml.v3 会把这些形式表示为 null scalar；单独判断文件字节是否为空无法覆盖它们
+// yaml.v3 会把这些形式表示为 null scalar
+// 单独判断文件字节是否为空无法覆盖它们
 func isNullDocument(root *yaml.Node) bool {
 	if root == nil || len(root.Content) == 0 {
 		return true
@@ -138,9 +141,10 @@ func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
 }
 
 // formatYAMLError 把 yaml.v3 的一条或多条解析错误转换为统一位置格式
-// KnownFields 和类型错误通常包含精确行号但不直接暴露列号；此处利用第一遍保留的
-// yaml.Node 查找对应 key/value 的列。若语法错误导致 AST 无法构建，则使用出错行上
-// 第一个非空白字符作为可靠回退位置，仍保证调用方得到 path:line:column
+// KnownFields 和类型错误通常包含精确行号但不直接暴露列号
+// 此处利用第一遍保留的 yaml.Node 查找对应 key/value 的列
+// 若语法错误导致 AST 无法构建，则使用出错行上第一个非空白字符作为可靠回退位置
+// 仍保证调用方得到 path:line:column
 func formatYAMLError(path string, data []byte, root *yaml.Node, err error) error {
 	messages := splitYAMLError(err)
 	formatted := make([]string, 0, len(messages))

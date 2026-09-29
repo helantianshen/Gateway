@@ -1,0 +1,2 @@
+ok  	github.com/helantianshen/gateway/internal/router	1.100s
+ok  	github.com/helantianshen/gateway/internal/dataplane/gateway	1.012s

@@ -1,0 +1,62 @@
+api_version: v1
+upstreams:
+  - id: bench
+    endpoints:
+      - id: fixed
+        url: http://127.0.0.1:58135
+        weight: 100
+routes:
+  - id: r0
+    host: "h00000.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r1
+    host: "h00001.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r2
+    host: "h00002.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r3
+    host: "h00003.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r4
+    host: "h00004.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r5
+    host: "h00005.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r6
+    host: "h00006.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r7
+    host: "h00007.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r8
+    host: "h00008.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+  - id: r9
+    host: "h00009.example.com"
+    method: GET
+    path: /users/:id
+    upstream: bench
+policies:
+  request_timeout: 3s
+  rate: 0
+  burst: 0
